@@ -47,4 +47,58 @@ dotnet run
 - Overlay sizing uses the Windows virtual desktop metrics so drawing can extend across the full visible desktop region.
 - Settings are stored under `%AppData%\PlusPlusPen\settings.json`.
 - Broken settings files are ignored safely and the app falls back to defaults.
-- The "Internet update" flow is still a placeholder; "Load from File" currently validates and previews update manifests only.
+
+## Update System (v0.1.0+)
+
+### Installation & Distribution
+
+1. **Build the Release**:
+   ```powershell
+   cd src/PlusPlusPen
+   dotnet publish -c Release -o bin/Release/net8.0-windows/publish
+   ```
+
+2. **Create Update Package** (PowerShell):
+   ```powershell
+   ./tools/CreateUpdatePackage.ps1 -Version "0.1.1" -Notes "Bug fixes and improvements"
+   ```
+   This creates `update/packages/pluspluspen_update_0.1.1.zip` with:
+   - `manifest.json` inside the ZIP
+   - All published binaries and dependencies
+   - Calculates and outputs SHA256 hash
+
+3. **Upload to GitHub Releases**:
+   - Go to [GitHub Releases](https://github.com/xrayoner/pluspluspen/releases)
+   - Create a new release with tag `v0.1.1`
+   - Upload the ZIP file
+   - Copy download URL
+
+4. **Update `update/latest.json`**:
+   ```json
+   {
+     "version": "0.1.1",
+     "minVersion": "0.1.0",
+     "notes": "Bug fixes and improvements",
+     "downloadUrl": "https://github.com/xrayoner/pluspluspen/releases/download/v0.1.1/pluspluspen_update_0.1.1.zip",
+     "sha256": "<hash from CreateUpdatePackage.ps1>"
+   }
+   ```
+   Push this to the repository.
+
+### Update Check (Settings > Updates Tab)
+
+**Current Version**: v0.1.0 (shown in the Updates tab)
+
+**Check from Internet** (`İnternetten al`):
+- Fetches `latest.json` from: `https://raw.githubusercontent.com/xrayoner/pluspluspen/main/update/latest.json`
+- Compares version with current (v0.1.0)
+- Shows message: "Yeni sürüm bulundu" or "Güncelleştirme yok"
+- Displays: version, minVersion, notes fields
+
+**Load from File** (`Dosya ile al`):
+- User selects a ZIP package (e.g., `pluspluspen_update_0.1.1.zip`)
+- Reads `manifest.json` from inside the ZIP
+- Displays: version, minVersion, notes fields
+- Shows "Paket geçerli" message on validation
+
+**Note**: Download and actual installation not yet implemented (test-only validation mode).

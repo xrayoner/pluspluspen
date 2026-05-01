@@ -7,4 +7,8 @@ public sealed class UpdateManifestModel
     public string MinVersion { get; set; } = string.Empty;
 
     public string Notes { get; set; } = string.Empty;
+
+    public string DownloadUrl { get; set; } = string.Empty;
+
+    public string Sha256 { get; set; } = string.Empty;
 }

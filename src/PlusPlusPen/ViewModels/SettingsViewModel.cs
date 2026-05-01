@@ -92,7 +92,7 @@ public sealed class SettingsViewModel : ViewModelBase
 
         SaveCommand = new RelayCommand(Save);
         BrowseSaveFolderCommand = new RelayCommand(BrowseSaveFolder);
-        FetchUpdateFromInternetCommand = new RelayCommand(ShowInternetUpdatePlaceholder);
+        FetchUpdateFromInternetCommand = new RelayCommand(FetchUpdateFromInternet);
         LoadUpdateFromFileCommand = new RelayCommand(LoadUpdateFromFile);
         ClearCanvasCommand = new RelayCommand(ClearCanvas);
         ResetSettingsCommand = new RelayCommand(ResetSettings);
@@ -367,9 +367,72 @@ public sealed class SettingsViewModel : ViewModelBase
         }
     }
 
-    private static void ShowInternetUpdatePlaceholder()
+    private async void FetchUpdateFromInternet()
     {
-        MessageBox.Show("İnternetten alma özelliği sonraki sürümde aktif olacak.", "++PEN", MessageBoxButton.OK, MessageBoxImage.Information);
+        try
+        {
+            ManifestVersion = "Kontrol ediliyor...";
+            ManifestMinVersion = "-";
+            ManifestNotes = "Lütfen bekleyiniz...";
+
+            var settings = _session.Settings;
+            var manifest = await _services.UpdatePackageService.FetchLatestFromUrlAsync(settings.UpdateFeedUrl);
+
+            if (string.IsNullOrWhiteSpace(manifest.Version))
+            {
+                MessageBox.Show("Sürüm bilgisi alınamadı.", "++PEN", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            ManifestVersion = manifest.Version;
+            ManifestMinVersion = manifest.MinVersion;
+            ManifestNotes = manifest.Notes;
+
+            // Mevcut versiyon ile karşılaştır
+            if (IsNewerVersion(manifest.Version, CurrentVersion))
+            {
+                MessageBox.Show($"Yeni sürüm bulundu: {manifest.Version}", "++PEN", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                MessageBox.Show("Güncelleştirme yok - halihazırda en yeni sürümü kullanıyorsunuz.", "++PEN", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            _services.LogService.LogError("İnternetten güncelleme kontrol edilirken hata oluştu.", ex);
+            ManifestVersion = "Hata: Bağlantı başarısız";
+            ManifestMinVersion = "-";
+            ManifestNotes = $"Hata: {ex.Message}";
+            MessageBox.Show("İnternetten güncelleme bilgisi alınamadı.", "++PEN", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private static bool IsNewerVersion(string newVersion, string currentVersion)
+    {
+        try
+        {
+            var newVer = newVersion.TrimStart('v');
+            var curVer = currentVersion.TrimStart('v');
+
+            var newParts = newVer.Split('.').Select(p => int.TryParse(p, out var i) ? i : 0).ToArray();
+            var curParts = curVer.Split('.').Select(p => int.TryParse(p, out var i) ? i : 0).ToArray();
+
+            for (int i = 0; i < Math.Max(newParts.Length, curParts.Length); i++)
+            {
+                var n = i < newParts.Length ? newParts[i] : 0;
+                var c = i < curParts.Length ? curParts[i] : 0;
+
+                if (n > c) return true;
+                if (n < c) return false;
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void LoadUpdateFromFile()

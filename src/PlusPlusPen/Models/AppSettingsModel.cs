@@ -63,6 +63,8 @@ public sealed class AppSettingsModel
 
     public string LastUpdatePackagePath { get; set; } = string.Empty;
 
+    public string UpdateFeedUrl { get; set; } = "https://raw.githubusercontent.com/xrayoner/pluspluspen/main/update/latest.json";
+
     public static Color ParseColor(string colorHex, string fallbackHex)
     {
         try
