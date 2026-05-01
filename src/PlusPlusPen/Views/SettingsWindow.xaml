@@ -1,0 +1,327 @@
+<Window x:Class="PlusPlusPen.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:viewModels="clr-namespace:PlusPlusPen.ViewModels"
+        Title="++PEN Ayarlar"
+        Width="760"
+        Height="680"
+        MinWidth="760"
+        MinHeight="680"
+        WindowStartupLocation="CenterOwner"
+        Background="#FFF4FBFF">
+    <Window.Resources>
+        <viewModels:EnumDisplayConverter x:Key="EnumDisplayConverter" />
+        <DataTemplate x:Key="EnumOptionTemplate">
+            <TextBlock Text="{Binding Converter={StaticResource EnumDisplayConverter}}" />
+        </DataTemplate>
+        <Style TargetType="ComboBox">
+            <Setter Property="ItemTemplate" Value="{StaticResource EnumOptionTemplate}" />
+        </Style>
+    </Window.Resources>
+
+    <Border Margin="12"
+            Padding="14"
+            CornerRadius="16"
+            Background="#F4FFFFFF"
+            BorderBrush="{StaticResource PanelBorderBrush}"
+            BorderThickness="1.4">
+        <DockPanel>
+            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                <TextBlock Text="++PEN Ayarlar"
+                           FontSize="26"
+                           FontWeight="Bold"
+                           Foreground="{StaticResource PanelTextBrush}" />
+                <TextBlock Text="Canlı olarak uygulanabilen temel ayarlar ve bakım araçları."
+                           Foreground="#AA17344F"
+                           Margin="0,4,0,0" />
+            </StackPanel>
+
+            <Button DockPanel.Dock="Bottom"
+                    Margin="0,12,0,0"
+                    Height="40"
+                    Width="160"
+                    HorizontalAlignment="Right"
+                    Command="{Binding SaveCommand}"
+                    Background="{StaticResource PanelAccentBrush}"
+                    Foreground="White"
+                    BorderThickness="0"
+                    Content="Kaydet ve Uygula" />
+
+            <TabControl Background="Transparent">
+                <TabItem Header="Genel">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <CheckBox Content="Uygulama başlangıçta açılsın"
+                                      IsChecked="{Binding LaunchAtStartup}" />
+                            <CheckBox Margin="0,12,0,0"
+                                      Content="Panel her zaman üstte kalsın"
+                                      IsChecked="{Binding KeepPanelOnTop}" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Panel saydamlığı (%)" FontWeight="SemiBold" />
+                            <Slider Margin="0,6,0,0"
+                                    Minimum="20"
+                                    Maximum="100"
+                                    Value="{Binding PanelOpacityPercent}" />
+                            <TextBlock Text="{Binding PanelOpacityPercent, StringFormat=F0}" HorizontalAlignment="Right" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Panel boyutu" FontWeight="SemiBold" />
+                            <ComboBox Margin="0,6,0,0"
+                                      ItemsSource="{Binding PanelSizeOptions}"
+                                      SelectedItem="{Binding PanelSize}" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Varsayılan araç" FontWeight="SemiBold" />
+                            <ComboBox Margin="0,6,0,0"
+                                      ItemsSource="{Binding ToolOptions}"
+                                      SelectedItem="{Binding DefaultTool}" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Dil" FontWeight="SemiBold" />
+                            <ComboBox Margin="0,6,0,0"
+                                      ItemsSource="{Binding LanguageOptions}"
+                                      SelectedItem="{Binding Language}" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Tema">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <TextBlock Text="Tema seçimi" FontWeight="SemiBold" />
+                            <ComboBox Margin="0,6,0,0"
+                                      ItemsSource="{Binding ThemeOptions}"
+                                      SelectedItem="{Binding SelectedTheme}" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Özel vurgu rengi (HEX)" FontWeight="SemiBold" />
+                            <TextBox Margin="0,6,0,0"
+                                     Text="{Binding AccentColorHex, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Seçili araç rengi (HEX)" FontWeight="SemiBold" />
+                            <TextBox Margin="0,6,0,0"
+                                     Text="{Binding ActiveToolColorHex, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Margin="0,18,0,0"
+                                       Text="Varsayılan seçili araç rengi yeşildir, isterseniz burada değiştirebilirsiniz."
+                                       TextWrapping="Wrap"
+                                       Foreground="#AA17344F" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Kalem">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <TextBlock Text="Varsayılan kalınlık" FontWeight="SemiBold" />
+                            <Slider Margin="0,6,0,0"
+                                    Minimum="2"
+                                    Maximum="18"
+                                    Value="{Binding DefaultThickness}" />
+                            <TextBlock Text="{Binding DefaultThickness, StringFormat=F1}" HorizontalAlignment="Right" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Kalem hassasiyeti" FontWeight="SemiBold" />
+                            <ComboBox Margin="0,6,0,0"
+                                      ItemsSource="{Binding PenSensitivityOptions}"
+                                      SelectedItem="{Binding PenSensitivity}" />
+
+                            <CheckBox Margin="0,18,0,0"
+                                      Content="Dinamik kalınlık açık"
+                                      IsChecked="{Binding DynamicThicknessEnabled}" />
+                            <CheckBox Margin="0,8,0,0"
+                                      Content="Dolma kalem efekti açık"
+                                      IsChecked="{Binding FountainPenEffectEnabled}" />
+                            <CheckBox Margin="0,8,0,0"
+                                      Content="Smoothing açık"
+                                      IsChecked="{Binding SmoothingEnabled}" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Smoothing seviyesi (%)" FontWeight="SemiBold" />
+                            <Slider Margin="0,6,0,0"
+                                    Minimum="5"
+                                    Maximum="100"
+                                    Value="{Binding SmoothingLevel}" />
+                            <TextBlock Text="{Binding SmoothingLevel, StringFormat=F0}" HorizontalAlignment="Right" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Minimum çizgi kalınlığı" FontWeight="SemiBold" />
+                            <Slider Margin="0,6,0,0"
+                                    Minimum="1"
+                                    Maximum="20"
+                                    Value="{Binding MinimumStrokeThickness}" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Maksimum çizgi kalınlığı" FontWeight="SemiBold" />
+                            <Slider Margin="0,6,0,0"
+                                    Minimum="2"
+                                    Maximum="32"
+                                    Value="{Binding MaximumStrokeThickness}" />
+
+                            <CheckBox Margin="0,18,0,0"
+                                      Content="Mouse hızıyla kalınlık değişimi"
+                                      IsChecked="{Binding MouseSpeedAffectsThickness}" />
+                            <CheckBox Margin="0,8,0,0"
+                                      Content="Stylus pressure desteği"
+                                      IsChecked="{Binding StylusPressureEnabled}" />
+
+                            <StackPanel Margin="0,18,0,0">
+                                <TextBlock Text="Avuç içi reddetme" FontWeight="SemiBold" />
+                                <TextBlock Margin="0,6,0,0"
+                                           Text="{Binding PalmRejectionStatus}"
+                                           Foreground="{StaticResource PanelAccentBrush}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Silgi">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <TextBlock Text="Silgi boyutu" FontWeight="SemiBold" />
+                            <Slider Margin="0,6,0,0"
+                                    Minimum="8"
+                                    Maximum="64"
+                                    Value="{Binding EraserSize}" />
+                            <TextBlock Text="{Binding EraserSize, StringFormat=F0}" HorizontalAlignment="Right" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Silme modu" FontWeight="SemiBold" />
+                            <ComboBox Margin="0,6,0,0"
+                                      ItemsSource="{Binding EraserModeOptions}"
+                                      SelectedItem="{Binding EraserMode}" />
+
+                            <Button Margin="0,20,0,0"
+                                    Height="34"
+                                    Command="{Binding ClearCanvasCommand}"
+                                    Content="Tüm ekranı temizle" />
+                            <TextBlock Margin="0,8,0,0"
+                                       Text="Temizlemeden önce kullanıcıya onay sorulur."
+                                       Foreground="#AA17344F" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Kaydetme">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <TextBlock Text="Varsayılan kayıt klasörü" FontWeight="SemiBold" />
+                            <DockPanel Margin="0,6,0,0">
+                                <Button DockPanel.Dock="Right"
+                                        Width="120"
+                                        Margin="8,0,0,0"
+                                        Command="{Binding BrowseSaveFolderCommand}"
+                                        Content="Klasör Seç" />
+                                <TextBox Text="{Binding SaveFolder}" IsReadOnly="True" />
+                            </DockPanel>
+
+                            <CheckBox Margin="0,18,0,0"
+                                      IsChecked="True"
+                                      IsEnabled="False"
+                                      Content="PNG olarak kaydet" />
+                            <CheckBox Margin="0,8,0,0"
+                                      Content="Şeffaf arka planla kaydet"
+                                      IsChecked="{Binding TransparentBackgroundEnabled}" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Dosya adı formatı" FontWeight="SemiBold" />
+                            <TextBox Margin="0,6,0,0"
+                                     Text="{Binding FileNamePattern, Mode=OneWay}"
+                                     IsReadOnly="True" />
+
+                            <CheckBox Margin="0,18,0,0"
+                                      Content="Otomatik kaydetme açık"
+                                      IsChecked="{Binding AutoSaveEnabled}" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Otomatik kaydetme aralığı" FontWeight="SemiBold" />
+                            <ComboBox Margin="0,6,0,0"
+                                      ItemsSource="{Binding AutoSaveIntervalOptions}"
+                                      SelectedItem="{Binding AutoSaveInterval}" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Güncelleştirmeler">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <TextBlock Text="Mevcut sürüm" FontWeight="SemiBold" />
+                            <TextBlock Margin="0,6,0,0" Text="{Binding CurrentVersion}" />
+
+                            <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                                <Button Width="170"
+                                        Height="34"
+                                        Margin="0,0,8,0"
+                                        Command="{Binding FetchUpdateFromInternetCommand}"
+                                        Content="İnternetten al" />
+                                <Button Width="170"
+                                        Height="34"
+                                        Command="{Binding LoadUpdateFromFileCommand}"
+                                        Content="Dosya ile al" />
+                            </StackPanel>
+
+                            <TextBlock Margin="0,18,0,0" Text="Son seçilen paket" FontWeight="SemiBold" />
+                            <TextBlock Margin="0,6,0,0" Text="{Binding LastUpdatePackagePath}" TextWrapping="Wrap" />
+
+                            <Grid Margin="0,18,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="manifest version:" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="1" Text="{Binding ManifestVersion}" />
+                                <TextBlock Grid.Row="1" Text="manifest minVersion:" FontWeight="SemiBold" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ManifestMinVersion}" Margin="0,8,0,0" />
+                            </Grid>
+
+                            <TextBlock Margin="0,18,0,0" Text="Notlar" FontWeight="SemiBold" />
+                            <TextBlock Margin="0,6,0,0" Text="{Binding ManifestNotes}" TextWrapping="Wrap" />
+
+                            <TextBlock Margin="0,18,0,0"
+                                       Text="{Binding UpdateFeatureNote}"
+                                       Foreground="{StaticResource PanelAccentBrush}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Bakım">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <Button Height="34"
+                                    Command="{Binding ResetSettingsCommand}"
+                                    Content="Uygulama ayarlarını sıfırla" />
+                            <Button Margin="0,10,0,0"
+                                    Height="34"
+                                    Command="{Binding ClearCanvasCommand}"
+                                    Content="Çizimleri temizle" />
+                            <Button Margin="0,10,0,0"
+                                    Height="34"
+                                    Command="{Binding ClearCacheCommand}"
+                                    Content="Önbelleği temizle" />
+                            <Button Margin="0,10,0,0"
+                                    Height="34"
+                                    Command="{Binding OpenLogCommand}"
+                                    Content="Log dosyasını aç" />
+                            <Button Margin="0,10,0,0"
+                                    Height="34"
+                                    Command="{Binding ClearLogsCommand}"
+                                    Content="Logları temizle" />
+
+                            <Border Margin="0,18,0,0"
+                                    Padding="12"
+                                    BorderBrush="{StaticResource PanelBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Background="#F8F9FCFF">
+                                <StackPanel>
+                                    <TextBlock Text="Kaldırma bilgisi" FontWeight="Bold" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               Text="++PEN’i kaldırmak için Windows Ayarları > Uygulamalar bölümünü kullanın."
+                                               TextWrapping="Wrap" />
+                                    <Button Margin="0,10,0,0"
+                                            Width="180"
+                                            Command="{Binding ShowUninstallInfoCommand}"
+                                            Content="Kaldırma bilgisini göster" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
+        </DockPanel>
+    </Border>
+</Window>

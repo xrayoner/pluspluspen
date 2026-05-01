@@ -1,0 +1,16 @@
+<Window x:Class="PlusPlusPen.Views.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:PlusPlusPen.Controls"
+        Title="Overlay"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        Background="Black"
+        ShowInTaskbar="False"
+        Topmost="True">
+    <Grid Background="Transparent">
+        <controls:DrawingSurfaceControl x:Name="DrawingSurface"
+                                        Session="{Binding}"
+                                        Focusable="True" />
+    </Grid>
+</Window>
