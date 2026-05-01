@@ -27,8 +27,12 @@ public sealed class SettingsViewModel : ViewModelBase
     private PenSensitivity _penSensitivity;
     private bool _dynamicThicknessEnabled;
     private bool _fountainPenEffectEnabled;
+    private bool _performanceModeEnabled;
+    private bool _liveSmoothingEnabled;
     private bool _smoothingEnabled;
     private double _smoothingLevel;
+    private double _minimumPointDistance;
+    private int _interpolationLimit;
     private double _minimumStrokeThickness;
     private double _maximumStrokeThickness;
     private bool _mouseSpeedAffectsThickness;
@@ -64,8 +68,12 @@ public sealed class SettingsViewModel : ViewModelBase
         _penSensitivity = settings.PenSensitivity;
         _dynamicThicknessEnabled = settings.DynamicThicknessEnabled;
         _fountainPenEffectEnabled = settings.FountainPenEffectEnabled;
+        _performanceModeEnabled = settings.PerformanceModeEnabled;
+        _liveSmoothingEnabled = settings.LiveSmoothingEnabled;
         _smoothingEnabled = settings.SmoothingEnabled;
         _smoothingLevel = settings.SmoothingLevel * 100;
+        _minimumPointDistance = settings.MinimumPointDistance;
+        _interpolationLimit = settings.InterpolationLimit;
         _minimumStrokeThickness = settings.MinimumStrokeThickness;
         _maximumStrokeThickness = settings.MaximumStrokeThickness;
         _mouseSpeedAffectsThickness = settings.MouseSpeedAffectsThickness;
@@ -214,6 +222,18 @@ public sealed class SettingsViewModel : ViewModelBase
         set => SetProperty(ref _fountainPenEffectEnabled, value);
     }
 
+    public bool PerformanceModeEnabled
+    {
+        get => _performanceModeEnabled;
+        set => SetProperty(ref _performanceModeEnabled, value);
+    }
+
+    public bool LiveSmoothingEnabled
+    {
+        get => _liveSmoothingEnabled;
+        set => SetProperty(ref _liveSmoothingEnabled, value);
+    }
+
     public bool SmoothingEnabled
     {
         get => _smoothingEnabled;
@@ -224,6 +244,18 @@ public sealed class SettingsViewModel : ViewModelBase
     {
         get => _smoothingLevel;
         set => SetProperty(ref _smoothingLevel, value);
+    }
+
+    public double MinimumPointDistance
+    {
+        get => _minimumPointDistance;
+        set => SetProperty(ref _minimumPointDistance, value);
+    }
+
+    public int InterpolationLimit
+    {
+        get => _interpolationLimit;
+        set => SetProperty(ref _interpolationLimit, value);
     }
 
     public double MinimumStrokeThickness
@@ -564,8 +596,12 @@ public sealed class SettingsViewModel : ViewModelBase
             PenSensitivity = PenSensitivity,
             DynamicThicknessEnabled = DynamicThicknessEnabled,
             FountainPenEffectEnabled = FountainPenEffectEnabled,
+            PerformanceModeEnabled = PerformanceModeEnabled,
+            LiveSmoothingEnabled = LiveSmoothingEnabled,
             SmoothingEnabled = SmoothingEnabled,
             SmoothingLevel = Math.Clamp(SmoothingLevel / 100d, 0.05, 1.0),
+            MinimumPointDistance = Math.Max(0.0, MinimumPointDistance),
+            InterpolationLimit = Math.Max(1, InterpolationLimit),
             MinimumStrokeThickness = minThickness,
             MaximumStrokeThickness = maxThickness,
             MouseSpeedAffectsThickness = MouseSpeedAffectsThickness,

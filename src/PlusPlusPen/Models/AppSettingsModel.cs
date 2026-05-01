@@ -30,9 +30,17 @@ public sealed class AppSettingsModel
 
     public bool FountainPenEffectEnabled { get; set; } = true;
 
+    public bool PerformanceModeEnabled { get; set; } = true;
+
+    public bool LiveSmoothingEnabled { get; set; } = false;
+
     public bool SmoothingEnabled { get; set; } = true;
 
     public double SmoothingLevel { get; set; } = 0.55;
+
+    public double MinimumPointDistance { get; set; } = 3.0;
+
+    public int InterpolationLimit { get; set; } = 8;
 
     public double MinimumStrokeThickness { get; set; } = 2;
 

@@ -131,12 +131,41 @@
                                       Content="Smoothing açık"
                                       IsChecked="{Binding SmoothingEnabled}" />
 
+                            <TextBlock Margin="0,18,0,0" Text="Performans modu" FontWeight="SemiBold" />
+                            <CheckBox Margin="0,6,0,0"
+                                      Content="Düşük gecikmeli canlı çizim modu"
+                                      IsChecked="{Binding PerformanceModeEnabled}" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Canlı smoothing" FontWeight="SemiBold" />
+                            <CheckBox Margin="0,6,0,0"
+                                      Content="Canlı hareket sırasında smoothing uygula"
+                                      IsChecked="{Binding LiveSmoothingEnabled}" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Stroke sonu smoothing" FontWeight="SemiBold" />
+                            <CheckBox Margin="0,6,0,0"
+                                      Content="Çizim bitince smoothing uygula"
+                                      IsChecked="{Binding SmoothingEnabled}" />
+
                             <TextBlock Margin="0,18,0,0" Text="Smoothing seviyesi (%)" FontWeight="SemiBold" />
                             <Slider Margin="0,6,0,0"
                                     Minimum="5"
                                     Maximum="100"
                                     Value="{Binding SmoothingLevel}" />
                             <TextBlock Text="{Binding SmoothingLevel, StringFormat=F0}" HorizontalAlignment="Right" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Minimum nokta mesafesi (px)" FontWeight="SemiBold" />
+                            <Slider Margin="0,6,0,0"
+                                    Minimum="0"
+                                    Maximum="12"
+                                    Value="{Binding MinimumPointDistance}" />
+                            <TextBlock Text="{Binding MinimumPointDistance, StringFormat=F1}" HorizontalAlignment="Right" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Interpolasyon sınırı" FontWeight="SemiBold" />
+                            <Slider Margin="0,6,0,0"
+                                    Minimum="1"
+                                    Maximum="16"
+                                    Value="{Binding InterpolationLimit}" />
+                            <TextBlock Text="{Binding InterpolationLimit}" HorizontalAlignment="Right" />
 
                             <TextBlock Margin="0,18,0,0" Text="Minimum çizgi kalınlığı" FontWeight="SemiBold" />
                             <Slider Margin="0,6,0,0"

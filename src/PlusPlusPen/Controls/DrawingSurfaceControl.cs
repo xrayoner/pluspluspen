@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -12,6 +11,7 @@ namespace PlusPlusPen.Controls;
 
 public sealed class DrawingSurfaceControl : FrameworkElement
 {
+    private const int EraserCommitIntervalMs = 20;
     public static readonly DependencyProperty SessionProperty =
         DependencyProperty.Register(
             nameof(Session),
@@ -32,6 +32,11 @@ public sealed class DrawingSurfaceControl : FrameworkElement
     private bool _eraserSnapshotTaken;
     private Point? _hoverPoint;
     private bool _cacheDirty = true;
+    private long _lastEraserCommitTicks;
+    private bool _eraserDirtySinceCommit;
+    private Point? _lastEraserPoint;
+    private readonly List<EraserStrokeHitEntry> _eraserHitEntries = [];
+    private const double MinimumEraserFragmentLength = 1.5;
 
     public DrawingSessionService? Session
     {
@@ -67,7 +72,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
 
         if (Session.ActiveTool == ToolKind.Eraser && _hoverPoint is not null)
         {
-            var radius = Math.Max(8, Session.Settings.EraserSize);
+            var radius = GetEraserRadius();
             var previewPen = new Pen(new SolidColorBrush(Color.FromArgb(220, 60, 189, 91)), 1.4)
             {
                 DashStyle = DashStyles.Solid
@@ -213,7 +218,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         }
         else
         {
-            EraseAt(rawPoint);
+            BeginEraserStroke(rawPoint);
         }
     }
 
@@ -226,12 +231,16 @@ public sealed class DrawingSurfaceControl : FrameworkElement
 
         if (Session.ActiveTool == ToolKind.Pen)
         {
-            AddPointToActiveStroke(rawPoint, pressure ?? 0.5f, isFirst: false);
-            InvalidateVisual();
+            var accepted = AddPointToActiveStroke(rawPoint, pressure ?? 0.5f, isFirst: false);
+            if (accepted)
+            {
+                InvalidateVisual();
+            }
         }
         else
         {
-            EraseAt(rawPoint);
+            ContinueEraserStroke(rawPoint);
+            InvalidateVisual();
         }
     }
 
@@ -239,18 +248,25 @@ public sealed class DrawingSurfaceControl : FrameworkElement
     {
         if (Session is not null && Session.ActiveTool == ToolKind.Pen && _activeStroke is { Points.Count: > 0 })
         {
+            if (Session.Settings.SmoothingEnabled)
+            {
+                _activeStroke = SmoothCompletedStroke(_activeStroke, Session.Settings.SmoothingLevel);
+            }
+
             Session.PushHistorySnapshot();
             Session.AddStroke(_activeStroke);
         }
 
         if (Session is not null && Session.ActiveTool == ToolKind.Eraser && _eraserSnapshotTaken)
         {
+            FlushEraserChanges(force: true);
             Session.RaiseStateSignals();
         }
 
         _activeStroke = null;
         _isDrawing = false;
         _smoothingWindow.Clear();
+        ClearEraserState();
 
         if (IsMouseCaptured)
         {
@@ -265,27 +281,27 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         InvalidateVisual();
     }
 
-    private void AddPointToActiveStroke(Point rawPoint, float pressure, bool isFirst)
+    private bool AddPointToActiveStroke(Point rawPoint, float pressure, bool isFirst)
     {
         if (Session is null || _activeStroke is null)
         {
-            return;
+            return false;
         }
 
         var now = _stopwatch.ElapsedMilliseconds;
         _smoothingWindow.Enqueue((rawPoint, now));
-        var smoothingCount = Session.Settings.SmoothingEnabled
-            ? Math.Clamp((int)Math.Round(2 + Session.Settings.SmoothingLevel * 6), 2, 8)
+        var smoothingCount = Session.Settings.LiveSmoothingEnabled
+            ? Math.Clamp((int)Math.Round(1 + Session.Settings.SmoothingLevel * 4), 1, 6)
             : 1;
         while (_smoothingWindow.Count > smoothingCount)
         {
             _smoothingWindow.Dequeue();
         }
 
-        var targetPoint = Session.Settings.SmoothingEnabled ? AveragePoint(_smoothingWindow) : rawPoint;
+        var targetPoint = Session.Settings.LiveSmoothingEnabled ? AveragePoint(_smoothingWindow) : rawPoint;
         if (!isFirst && ShouldSkipSample(targetPoint, now))
         {
-            return;
+            return false;
         }
 
         var width = CalculateWidth(targetPoint, now, pressure, isFirst);
@@ -293,6 +309,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         _lastPoint = targetPoint;
         _lastTicks = now;
         _lastAcceptedTicks = now;
+        return true;
     }
 
     private double CalculateWidth(Point point, long ticks, float pressure, bool isFirst)
@@ -354,7 +371,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         return Math.Clamp(result, Session.Settings.MinimumStrokeThickness, Session.Settings.MaximumStrokeThickness);
     }
 
-    private void EraseAt(Point point)
+    private void BeginEraserStroke(Point point)
     {
         if (Session is null)
         {
@@ -369,55 +386,344 @@ public sealed class DrawingSurfaceControl : FrameworkElement
             _eraserSnapshotTaken = true;
         }
 
-        var radius = Math.Max(8, Session.Settings.EraserSize);
-        var replacement = new List<StrokeModel>();
+        BuildEraserHitEntries();
+        _lastEraserCommitTicks = _stopwatch.ElapsedMilliseconds;
+        _eraserDirtySinceCommit = false;
+        _lastEraserPoint = null;
+        SampleEraserPath(point);
+        FlushEraserChanges(force: true);
+    }
 
-        foreach (var stroke in Session.Strokes)
+    private void ContinueEraserStroke(Point point)
+    {
+        _hoverPoint = point;
+        SampleEraserPath(point);
+
+        var now = _stopwatch.ElapsedMilliseconds;
+        if (now - _lastEraserCommitTicks >= EraserCommitIntervalMs)
         {
-            var fragments = Session.Settings.EraserMode == EraserMode.WholeStroke
-                ? RemoveWholeStroke(stroke, point, radius)
-                : SplitStroke(stroke, point, radius);
-            replacement.AddRange(fragments);
+            FlushEraserChanges(force: false);
+        }
+    }
+
+    private void BuildEraserHitEntries()
+    {
+        _eraserHitEntries.Clear();
+
+        if (Session is null)
+        {
+            return;
         }
 
-        Session.ReplaceStrokes(replacement);
-    }
-
-    private static IEnumerable<StrokeModel> RemoveWholeStroke(StrokeModel stroke, Point eraserCenter, double radius)
-    {
-        var intersects = stroke.Points.Any(point => (point.Position - eraserCenter).Length <= radius + point.Width * 0.5);
-        return intersects ? [] : [stroke.Clone()];
-    }
-
-    private static IEnumerable<StrokeModel> SplitStroke(StrokeModel stroke, Point eraserCenter, double radius)
-    {
-        var segments = new List<StrokeModel>();
-        StrokeModel? current = null;
-
-        foreach (var point in stroke.Points)
+        for (var strokeIndex = 0; strokeIndex < Session.Strokes.Count; strokeIndex++)
         {
-            var isRemoved = (point.Position - eraserCenter).Length <= radius + point.Width * 0.5;
-            if (isRemoved)
+            var stroke = Session.Strokes[strokeIndex];
+            if (stroke.Points.Count == 0)
             {
-                if (current is { Points.Count: > 1 })
-                {
-                    segments.Add(current);
-                }
-
-                current = null;
                 continue;
             }
 
-            current ??= new StrokeModel(stroke.Color);
-            current.Points.Add(new StrokePointModel(point.Position, point.Width));
-        }
+            double minX = double.PositiveInfinity;
+            double minY = double.PositiveInfinity;
+            double maxX = double.NegativeInfinity;
+            double maxY = double.NegativeInfinity;
+            var segments = new List<EraserSegment>(Math.Max(1, stroke.Points.Count - 1));
 
-        if (current is { Points.Count: > 1 })
+            for (var pointIndex = 0; pointIndex < stroke.Points.Count; pointIndex++)
+            {
+                var point = stroke.Points[pointIndex];
+                var halfWidth = point.Width * 0.5;
+                minX = Math.Min(minX, point.Position.X - halfWidth);
+                minY = Math.Min(minY, point.Position.Y - halfWidth);
+                maxX = Math.Max(maxX, point.Position.X + halfWidth);
+                maxY = Math.Max(maxY, point.Position.Y + halfWidth);
+
+                if (pointIndex == 0)
+                {
+                    continue;
+                }
+
+                var previous = stroke.Points[pointIndex - 1];
+                var radius = Math.Max(previous.Width, point.Width) * 0.5;
+                segments.Add(new EraserSegment(previous.Position, point.Position, radius));
+            }
+
+            var bounds = CreateBoundsFromExtrema(minX, minY, maxX, maxY);
+            _eraserHitEntries.Add(new EraserStrokeHitEntry(stroke, bounds, segments));
+        }
+    }
+
+    private void SampleEraserPath(Point point)
+    {
+        var radius = GetEraserRadius();
+        if (_lastEraserPoint is null)
         {
-            segments.Add(current);
+            TestEraserPoint(point, radius);
+            _lastEraserPoint = point;
+            return;
         }
 
-        return segments;
+        var start = _lastEraserPoint.Value;
+        var delta = point - start;
+        var distance = delta.Length;
+        if (distance <= 0.01)
+        {
+            TestEraserPoint(point, radius);
+            _lastEraserPoint = point;
+            return;
+        }
+
+        var spacing = Math.Max(1.2, radius * 0.45);
+        var steps = Math.Max(1, (int)Math.Ceiling(distance / spacing));
+        for (var step = 1; step <= steps; step++)
+        {
+            var t = step / (double)steps;
+            var sample = new Point(
+                Lerp(start.X, point.X, t),
+                Lerp(start.Y, point.Y, t));
+            TestEraserPoint(sample, radius);
+        }
+
+        _lastEraserPoint = point;
+    }
+
+    private void TestEraserPoint(Point eraserCenter, double eraserRadius)
+    {
+        var searchBounds = new Rect(
+            eraserCenter.X - eraserRadius,
+            eraserCenter.Y - eraserRadius,
+            eraserRadius * 2,
+            eraserRadius * 2);
+
+        for (var index = 0; index < _eraserHitEntries.Count; index++)
+        {
+            var entry = _eraserHitEntries[index];
+            if (entry.Fragments.Count == 0)
+            {
+                continue;
+            }
+
+            if (!entry.Bounds.IntersectsWith(searchBounds))
+            {
+                continue;
+            }
+
+            if (ApplyPartialErase(entry, eraserCenter, eraserRadius))
+            {
+                entry.RebuildBounds();
+                _eraserDirtySinceCommit = true;
+            }
+        }
+    }
+
+    private static bool ApplyPartialErase(EraserStrokeHitEntry entry, Point eraserCenter, double eraserRadius)
+    {
+        if (entry.Fragments.Count == 0)
+        {
+            return false;
+        }
+
+        var changed = false;
+        var updatedFragments = new List<StrokeModel>(entry.Fragments.Count);
+        foreach (var fragment in entry.Fragments)
+        {
+            var split = SplitFragmentByEraser(fragment, eraserCenter, eraserRadius);
+            if (split.FragmentChanged)
+            {
+                changed = true;
+            }
+
+            updatedFragments.AddRange(split.Fragments);
+        }
+
+        if (!changed)
+        {
+            return false;
+        }
+
+        entry.Fragments.Clear();
+        entry.Fragments.AddRange(updatedFragments);
+        return true;
+    }
+
+    private void FlushEraserChanges(bool force)
+    {
+        if (Session is null)
+        {
+            return;
+        }
+
+        if (!force && !_eraserDirtySinceCommit)
+        {
+            return;
+        }
+
+        var activeStrokeCount = 0;
+        foreach (var entry in _eraserHitEntries)
+        {
+            activeStrokeCount += entry.Fragments.Count;
+        }
+
+        if (activeStrokeCount == 0)
+        {
+            Session.ReplaceStrokes([]);
+            _lastEraserCommitTicks = _stopwatch.ElapsedMilliseconds;
+            _eraserDirtySinceCommit = false;
+            return;
+        }
+
+        var replacement = new List<StrokeModel>(activeStrokeCount);
+        foreach (var entry in _eraserHitEntries)
+        {
+            if (entry.Fragments.Count == 0)
+            {
+                continue;
+            }
+
+            replacement.AddRange(entry.Fragments);
+        }
+
+        Session.ReplaceStrokes(replacement);
+        _lastEraserCommitTicks = _stopwatch.ElapsedMilliseconds;
+        _eraserDirtySinceCommit = false;
+    }
+
+    private void ClearEraserState()
+    {
+        _eraserHitEntries.Clear();
+        _eraserDirtySinceCommit = false;
+        _lastEraserPoint = null;
+    }
+
+    private double GetEraserRadius()
+    {
+        return Session is null ? 8 : Math.Max(1.0, Session.Settings.EraserSize);
+    }
+
+    private static double DistancePointToSegment(Point point, Point start, Point end)
+    {
+        var segment = end - start;
+        var segmentLengthSquared = segment.X * segment.X + segment.Y * segment.Y;
+        if (segmentLengthSquared <= 0.0001)
+        {
+            return (point - start).Length;
+        }
+
+        var pointVector = point - start;
+        var projection = (pointVector.X * segment.X + pointVector.Y * segment.Y) / segmentLengthSquared;
+        var t = Math.Clamp(projection, 0, 1);
+        var nearest = new Point(start.X + segment.X * t, start.Y + segment.Y * t);
+        return (point - nearest).Length;
+    }
+
+    private static EraserSplitResult SplitFragmentByEraser(StrokeModel fragment, Point eraserCenter, double eraserRadius)
+    {
+        if (fragment.Points.Count == 0)
+        {
+            return EraserSplitResult.UnchangedEmpty;
+        }
+
+        if (fragment.Points.Count == 1)
+        {
+            var onlyPoint = fragment.Points[0];
+            var hit = (onlyPoint.Position - eraserCenter).Length <= eraserRadius + onlyPoint.Width * 0.5;
+            return hit
+                ? new EraserSplitResult([], true)
+                : new EraserSplitResult([fragment], false);
+        }
+
+        var output = new List<StrokeModel>();
+        StrokeModel? current = null;
+        var changed = false;
+
+        for (var index = 1; index < fragment.Points.Count; index++)
+        {
+            var previous = fragment.Points[index - 1];
+            var next = fragment.Points[index];
+            var segmentRadius = Math.Max(previous.Width, next.Width) * 0.5;
+            var segmentHit = DistancePointToSegment(eraserCenter, previous.Position, next.Position) <= eraserRadius + segmentRadius;
+
+            if (segmentHit)
+            {
+                changed = true;
+                if (current is not null)
+                {
+                    AddFragmentIfValid(output, current);
+                    current = null;
+                }
+
+                continue;
+            }
+
+            current ??= new StrokeModel(fragment.Color);
+            if (current.Points.Count == 0)
+            {
+                current.Points.Add(new StrokePointModel(previous.Position, previous.Width));
+            }
+
+            current.Points.Add(new StrokePointModel(next.Position, next.Width));
+        }
+
+        if (current is not null)
+        {
+            AddFragmentIfValid(output, current);
+        }
+
+        return new EraserSplitResult(output, changed);
+    }
+
+    private static void AddFragmentIfValid(List<StrokeModel> output, StrokeModel candidate)
+    {
+        if (candidate.Points.Count < 2)
+        {
+            return;
+        }
+
+        var totalLength = 0d;
+        for (var index = 1; index < candidate.Points.Count; index++)
+        {
+            totalLength += (candidate.Points[index].Position - candidate.Points[index - 1].Position).Length;
+        }
+
+        if (totalLength < MinimumEraserFragmentLength)
+        {
+            return;
+        }
+
+        output.Add(candidate);
+    }
+
+    private static Rect CreateBoundsForStrokes(IEnumerable<StrokeModel> strokes)
+    {
+        var hasValue = false;
+        double minX = double.PositiveInfinity;
+        double minY = double.PositiveInfinity;
+        double maxX = double.NegativeInfinity;
+        double maxY = double.NegativeInfinity;
+
+        foreach (var stroke in strokes)
+        {
+            foreach (var point in stroke.Points)
+            {
+                var halfWidth = point.Width * 0.5;
+                minX = Math.Min(minX, point.Position.X - halfWidth);
+                minY = Math.Min(minY, point.Position.Y - halfWidth);
+                maxX = Math.Max(maxX, point.Position.X + halfWidth);
+                maxY = Math.Max(maxY, point.Position.Y + halfWidth);
+                hasValue = true;
+            }
+        }
+
+        return hasValue
+            ? CreateBoundsFromExtrema(minX, minY, maxX, maxY)
+            : Rect.Empty;
+    }
+
+    private static Rect CreateBoundsFromExtrema(double minX, double minY, double maxX, double maxY)
+    {
+        var width = Math.Max(0.1, maxX - minX);
+        var height = Math.Max(0.1, maxY - minY);
+        return new Rect(minX, minY, width, height);
     }
 
     protected override void OnMouseLeave(MouseEventArgs e)
@@ -450,7 +756,8 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         var previous = _activeStroke.Points[^1];
         var distance = (targetPoint - previous.Position).Length;
         var spacing = Math.Max(1.2, Math.Min(previous.Width, targetWidth) * 0.45);
-        var steps = Math.Clamp((int)Math.Ceiling(distance / spacing), 1, 12);
+        var limit = Session?.Settings.InterpolationLimit ?? 8;
+        var steps = Math.Clamp((int)Math.Ceiling(distance / spacing), 1, limit);
 
         for (var index = 1; index <= steps; index++)
         {
@@ -468,11 +775,48 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         return start + (end - start) * amount;
     }
 
+    private static StrokeModel SmoothCompletedStroke(StrokeModel stroke, double smoothingLevel)
+    {
+        if (stroke.Points.Count < 3)
+        {
+            return stroke.Clone();
+        }
+
+        var smoothed = new StrokeModel(stroke.Color);
+        smoothed.Points.Add(new StrokePointModel(stroke.Points[0].Position, stroke.Points[0].Width));
+
+        var smoothingFactor = Math.Clamp(smoothingLevel * 0.35, 0.1, 0.4);
+        for (var index = 1; index < stroke.Points.Count - 1; index++)
+        {
+            var previous = stroke.Points[index - 1];
+            var current = stroke.Points[index];
+            var next = stroke.Points[index + 1];
+            var x = previous.Position.X * smoothingFactor + current.Position.X * (1 - 2 * smoothingFactor) + next.Position.X * smoothingFactor;
+            var y = previous.Position.Y * smoothingFactor + current.Position.Y * (1 - 2 * smoothingFactor) + next.Position.Y * smoothingFactor;
+            var width = (previous.Width + current.Width + next.Width) / 3.0;
+            smoothed.Points.Add(new StrokePointModel(new Point(x, y), width));
+        }
+
+        smoothed.Points.Add(new StrokePointModel(stroke.Points[^1].Position, stroke.Points[^1].Width));
+        return smoothed;
+    }
+
     private bool ShouldSkipSample(Point targetPoint, long now)
     {
+        if (Session is null)
+        {
+            return true;
+        }
+
+        var minDistance = Math.Max(0.0, Session.Settings.MinimumPointDistance);
         var distance = (targetPoint - _lastPoint).Length;
+        if (distance < minDistance)
+        {
+            return true;
+        }
+
         var delta = now - _lastAcceptedTicks;
-        return delta < 2 && distance < 0.9;
+        return delta < 3 && distance < Math.Max(0.75, minDistance * 0.25);
     }
 
     private void EnsureCommittedStrokeCache()
@@ -528,5 +872,33 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         }
 
         return new Point(x / count, y / count);
+    }
+
+    private readonly record struct EraserSegment(Point Start, Point End, double StrokeRadius);
+
+    private readonly record struct EraserSplitResult(List<StrokeModel> Fragments, bool FragmentChanged)
+    {
+        public static EraserSplitResult UnchangedEmpty { get; } = new([], false);
+    }
+
+    private sealed class EraserStrokeHitEntry
+    {
+        public EraserStrokeHitEntry(StrokeModel stroke, Rect bounds, List<EraserSegment> segments)
+        {
+            Bounds = bounds;
+            Segments = segments;
+            Fragments = [stroke.Clone()];
+        }
+
+        public Rect Bounds { get; private set; }
+
+        public List<EraserSegment> Segments { get; }
+
+        public List<StrokeModel> Fragments { get; }
+
+        public void RebuildBounds()
+        {
+            Bounds = CreateBoundsForStrokes(Fragments);
+        }
     }
 }
