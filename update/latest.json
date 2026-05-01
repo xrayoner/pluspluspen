@@ -1,8 +1,8 @@
 {
-  "app": "++PEN",
-  "version": "0.1.1",
-  "minVersion": "0.1.0",
-  "notes": "Test güncellemesi - ikon değiştirildi",
-  "downloadUrl": "https://github.com/xrayoner/pluspluspen/releases/download/v0.1.1/pluspluspen_update_0.1.1.zip",
-  "sha256": ""
+  "App": "++PEN",
+  "Version": "0.1.1",
+  "MinVersion": "0.1.0",
+  "Notes": "Test güncellemesi - ikon değiştirildi",
+  "DownloadUrl": "https://github.com/xrayoner/pluspluspen/releases/download/v0.1.1/pluspluspen_update_0.1.1.zip",
+  "Sha256": ""
 }
