@@ -1,5 +1,7 @@
 using System.Drawing;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Interop;
@@ -14,6 +16,7 @@ public sealed class OverlayWindowService
     private readonly DrawingSessionService _sessionService;
     private readonly LogService _logService;
     private OverlayWindow? _overlayWindow;
+    private Task? _pendingCaptureTask;
 
     public OverlayWindowService(DrawingSessionService sessionService, LogService logService)
     {
@@ -24,13 +27,14 @@ public sealed class OverlayWindowService
     public OverlayWindow EnsureVisible(Window owner)
     {
         _overlayWindow ??= new OverlayWindow(_sessionService);
+        var requiresCapture = _sessionService.BackgroundSnapshot is null;
 
         if (!_overlayWindow.IsVisible)
         {
-            CaptureAndInitialize(owner);
             _overlayWindow.SyncBounds();
             _overlayWindow.Topmost = false;
             _overlayWindow.Show();
+            _overlayWindow.PrepareForInput();
         }
 
         _sessionService.OverlayVisible = true;
@@ -39,10 +43,27 @@ public sealed class OverlayWindowService
         _overlayWindow.Topmost = false;
         owner.Show();
         RefreshToolbarZOrder(owner);
+        if (requiresCapture)
+        {
+            ScheduleBackgroundCapture(owner);
+        }
+        else
+        {
+            _overlayWindow.PrepareForInput();
+        }
         return _overlayWindow;
     }
 
     public OverlayWindow? GetWindow() => _overlayWindow;
+
+    public void PrepareForExistingSession()
+    {
+        if (_overlayWindow?.IsVisible == true)
+        {
+            _overlayWindow.SyncBounds();
+            _overlayWindow.PrepareForInput();
+        }
+    }
 
     public void Hide()
     {
@@ -62,18 +83,67 @@ public sealed class OverlayWindowService
         RefreshToolbarZOrder(owner);
     }
 
-    private void CaptureAndInitialize(Window owner)
+    private void ScheduleBackgroundCapture(Window owner)
     {
-        owner.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+        if (_sessionService.BackgroundSnapshot is not null)
+        {
+            return;
+        }
+
+        if (_pendingCaptureTask is { IsCompleted: false })
+        {
+            return;
+        }
+
+        _pendingCaptureTask = CaptureAndInitializeAsync(owner);
+    }
+
+    private async Task CaptureAndInitializeAsync(Window owner)
+    {
+        await owner.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+
+        var originalOpacity = 1d;
+        var originalTopmost = owner.Topmost;
+        var originalHitTestVisible = true;
 
         try
         {
-            _sessionService.InitializeOverlaySurface(CapturePrimaryScreen());
+            await owner.Dispatcher.InvokeAsync(() =>
+            {
+                originalOpacity = owner.Opacity;
+                originalHitTestVisible = owner.IsHitTestVisible;
+                owner.Topmost = false;
+                owner.Opacity = 0;
+                owner.IsHitTestVisible = false;
+            }, DispatcherPriority.Send);
+
+            await owner.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+            await Task.Delay(80);
+
+            var stopwatch = Stopwatch.StartNew();
+            var snapshot = await Task.Run(CapturePrimaryScreen);
+            stopwatch.Stop();
+            LogDebug($"Screenshot capture: {stopwatch.Elapsed.TotalMilliseconds:F2} ms");
+
+            await owner.Dispatcher.InvokeAsync(() =>
+            {
+                _sessionService.SetBackgroundSnapshot(snapshot);
+                _overlayWindow?.InvalidateVisual();
+            }, DispatcherPriority.Send);
         }
         catch (Exception ex)
         {
             _logService.LogError("Ekran görüntüsü alınamadı.", ex);
-            throw;
+        }
+        finally
+        {
+            await owner.Dispatcher.InvokeAsync(() =>
+            {
+                owner.Opacity = originalOpacity;
+                owner.IsHitTestVisible = originalHitTestVisible;
+                owner.Topmost = originalTopmost;
+                RefreshToolbarZOrder(owner);
+            }, DispatcherPriority.Send);
         }
     }
 
@@ -123,4 +193,10 @@ public sealed class OverlayWindowService
     [DllImport("gdi32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DeleteObject(IntPtr hObject);
+
+    [Conditional("DEBUG")]
+    private static void LogDebug(string message)
+    {
+        Debug.WriteLine($"[++PEN][Capture] {message}");
+    }
 }

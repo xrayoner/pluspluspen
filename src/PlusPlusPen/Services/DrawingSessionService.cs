@@ -64,6 +64,8 @@ public sealed class DrawingSessionService : INotifyPropertyChanged
         set => SetField(ref _overlayVisible, value);
     }
 
+    public bool IsModeTintVisible => _overlayVisible && (_activeTool == ToolKind.Pen || _activeTool == ToolKind.Eraser);
+
     public AppSettingsModel Settings
     {
         get => _settings;
@@ -88,6 +90,11 @@ public sealed class DrawingSessionService : INotifyPropertyChanged
 
     public void AddStroke(StrokeModel stroke)
     {
+        if (stroke.Bounds.IsEmpty)
+        {
+            stroke.RecalculateBounds();
+        }
+
         Strokes.Add(stroke);
         RaiseStateSignals();
     }
@@ -147,6 +154,12 @@ public sealed class DrawingSessionService : INotifyPropertyChanged
         RaiseStateSignals();
     }
 
+    public void SetBackgroundSnapshot(BitmapSource snapshot)
+    {
+        BackgroundSnapshot = snapshot;
+        RaiseStateSignals();
+    }
+
     public void ResetOverlaySurface()
     {
         BackgroundSnapshot = null;
@@ -178,6 +191,10 @@ public sealed class DrawingSessionService : INotifyPropertyChanged
 
         field = value;
         RaisePropertyChanged(propertyName);
+        if (propertyName is nameof(ActiveTool) or nameof(OverlayVisible))
+        {
+            RaisePropertyChanged(nameof(IsModeTintVisible));
+        }
         return true;
     }
 

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -78,34 +79,50 @@ public sealed class ToolbarViewModel : ViewModelBase
 
     public bool IsDrawingModeVisible => _session.OverlayVisible;
 
+    public bool IsBlackSelected => SelectedColor == Colors.Black;
+
+    public bool IsBlueSelected => SelectedColor == Colors.RoyalBlue;
+
+    public bool IsRedSelected => SelectedColor == Colors.Red;
+
+    public bool IsGreenSelected => SelectedColor == Colors.LimeGreen;
+
+    public bool IsYellowSelected => SelectedColor == Colors.Gold;
+
     private void SelectPen()
     {
+        var stopwatch = Stopwatch.StartNew();
         if (_session.ActiveTool == ToolKind.Pen && _session.OverlayVisible)
         {
             _services.OverlayWindowService.Hide();
             RaiseToolbarState();
+            LogDebug($"Tool switch Pen->Off: {stopwatch.Elapsed.TotalMilliseconds:F2} ms");
             return;
         }
 
         _session.ActiveTool = ToolKind.Pen;
         _session.OverlayVisible = true;
-        EnsureOverlay();
+        EnsureOverlayForToolSwitch();
         RaiseToolbarState();
+        LogDebug($"Tool switch -> Pen: {stopwatch.Elapsed.TotalMilliseconds:F2} ms");
     }
 
     private void SelectEraser()
     {
+        var stopwatch = Stopwatch.StartNew();
         if (_session.ActiveTool == ToolKind.Eraser && _session.OverlayVisible)
         {
             _services.OverlayWindowService.Hide();
             RaiseToolbarState();
+            LogDebug($"Tool switch Eraser->Off: {stopwatch.Elapsed.TotalMilliseconds:F2} ms");
             return;
         }
 
         _session.ActiveTool = ToolKind.Eraser;
         _session.OverlayVisible = true;
-        EnsureOverlay();
+        EnsureOverlayForToolSwitch();
         RaiseToolbarState();
+        LogDebug($"Tool switch -> Eraser: {stopwatch.Elapsed.TotalMilliseconds:F2} ms");
     }
 
     private void Undo()
@@ -169,11 +186,13 @@ public sealed class ToolbarViewModel : ViewModelBase
     {
         if (parameter is Color color)
         {
+            var stopwatch = Stopwatch.StartNew();
             _session.SelectedColor = color;
             _session.ActiveTool = ToolKind.Pen;
             _session.OverlayVisible = true;
-            EnsureOverlay();
+            EnsureOverlayForToolSwitch();
             RaiseToolbarState();
+            LogDebug($"Tool switch -> Pen(Color): {stopwatch.Elapsed.TotalMilliseconds:F2} ms");
         }
     }
 
@@ -192,6 +211,19 @@ public sealed class ToolbarViewModel : ViewModelBase
         return _services.OverlayWindowService.EnsureVisible(owner);
     }
 
+    private void EnsureOverlayForToolSwitch()
+    {
+        if (_session.BackgroundSnapshot is not null
+            && _session.OverlayVisible
+            && _services.OverlayWindowService.GetWindow()?.IsVisible == true)
+        {
+            _services.OverlayWindowService.PrepareForExistingSession();
+            return;
+        }
+
+        EnsureOverlay();
+    }
+
     private void RaiseToolbarState()
     {
         RaisePropertyChanged(nameof(ActiveTool));
@@ -200,6 +232,17 @@ public sealed class ToolbarViewModel : ViewModelBase
         RaisePropertyChanged(nameof(IsPenActive));
         RaisePropertyChanged(nameof(IsEraserActive));
         RaisePropertyChanged(nameof(IsDrawingModeVisible));
+        RaisePropertyChanged(nameof(IsBlackSelected));
+        RaisePropertyChanged(nameof(IsBlueSelected));
+        RaisePropertyChanged(nameof(IsRedSelected));
+        RaisePropertyChanged(nameof(IsGreenSelected));
+        RaisePropertyChanged(nameof(IsYellowSelected));
+    }
+
+    [Conditional("DEBUG")]
+    private static void LogDebug(string message)
+    {
+        Debug.WriteLine($"[++PEN][Toolbar] {message}");
     }
 
 }

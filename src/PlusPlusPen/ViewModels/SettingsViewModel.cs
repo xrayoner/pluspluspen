@@ -11,7 +11,6 @@ namespace PlusPlusPen.ViewModels;
 
 public sealed class SettingsViewModel : ViewModelBase
 {
-    private const string CurrentVersionValue = "v0.1.0";
     private readonly ServiceContainer _services;
     private readonly DrawingSessionService _session;
     private bool _launchAtStartup;
@@ -24,8 +23,12 @@ public sealed class SettingsViewModel : ViewModelBase
     private string _accentColorHex;
     private string _activeToolColorHex;
     private double _defaultThickness;
+    private PenStyleOption _penStyle;
     private PenSensitivity _penSensitivity;
+    private SmoothingPresetOption _smoothingPreset;
     private bool _dynamicThicknessEnabled;
+    private bool _velocityBasedThicknessEnabled;
+    private bool _strokeTaperEnabled;
     private bool _fountainPenEffectEnabled;
     private bool _performanceModeEnabled;
     private bool _liveSmoothingEnabled;
@@ -47,6 +50,8 @@ public sealed class SettingsViewModel : ViewModelBase
     private string _manifestVersion;
     private string _manifestMinVersion;
     private string _manifestNotes;
+    private string _manifestDownloadUrl;
+    private string _manifestSha256;
     private string _lastUpdatePackagePath;
 
     public SettingsViewModel(ServiceContainer services)
@@ -65,8 +70,12 @@ public sealed class SettingsViewModel : ViewModelBase
         _accentColorHex = settings.AccentColorHex;
         _activeToolColorHex = settings.ActiveToolColorHex;
         _defaultThickness = settings.DefaultThickness;
+        _penStyle = settings.PenStyle;
         _penSensitivity = settings.PenSensitivity;
+        _smoothingPreset = settings.SmoothingPreset;
         _dynamicThicknessEnabled = settings.DynamicThicknessEnabled;
+        _velocityBasedThicknessEnabled = settings.VelocityBasedThicknessEnabled;
+        _strokeTaperEnabled = settings.StrokeTaperEnabled;
         _fountainPenEffectEnabled = settings.FountainPenEffectEnabled;
         _performanceModeEnabled = settings.PerformanceModeEnabled;
         _liveSmoothingEnabled = settings.LiveSmoothingEnabled;
@@ -88,13 +97,17 @@ public sealed class SettingsViewModel : ViewModelBase
         _lastUpdatePackagePath = settings.LastUpdatePackagePath;
         _manifestVersion = "Henüz paket seçilmedi";
         _manifestMinVersion = "-";
-        _manifestNotes = "Bu özellik tam güncelleme motoru sonraki sürümde aktif olacak.";
+        _manifestNotes = "Güncelleştirme Merkezi hazır.";
+        _manifestDownloadUrl = "-";
+        _manifestSha256 = "-";
 
         ThemeOptions = new ObservableCollection<ThemeMode>(Enum.GetValues<ThemeMode>());
         PanelSizeOptions = new ObservableCollection<PanelSizeOption>(Enum.GetValues<PanelSizeOption>());
         ToolOptions = new ObservableCollection<ToolKind>(Enum.GetValues<ToolKind>());
         LanguageOptions = new ObservableCollection<AppLanguage>(Enum.GetValues<AppLanguage>());
+        PenStyleOptions = new ObservableCollection<PenStyleOption>(Enum.GetValues<PenStyleOption>());
         PenSensitivityOptions = new ObservableCollection<PenSensitivity>(Enum.GetValues<PenSensitivity>());
+        SmoothingPresetOptions = new ObservableCollection<SmoothingPresetOption>(Enum.GetValues<SmoothingPresetOption>());
         EraserModeOptions = new ObservableCollection<EraserMode>(Enum.GetValues<EraserMode>());
         AutoSaveIntervalOptions = new ObservableCollection<AutoSaveIntervalOption>(Enum.GetValues<AutoSaveIntervalOption>());
 
@@ -118,7 +131,11 @@ public sealed class SettingsViewModel : ViewModelBase
 
     public ObservableCollection<AppLanguage> LanguageOptions { get; }
 
+    public ObservableCollection<PenStyleOption> PenStyleOptions { get; }
+
     public ObservableCollection<PenSensitivity> PenSensitivityOptions { get; }
+
+    public ObservableCollection<SmoothingPresetOption> SmoothingPresetOptions { get; }
 
     public ObservableCollection<EraserMode> EraserModeOptions { get; }
 
@@ -204,16 +221,40 @@ public sealed class SettingsViewModel : ViewModelBase
         set => SetProperty(ref _defaultThickness, value);
     }
 
+    public PenStyleOption PenStyle
+    {
+        get => _penStyle;
+        set => SetProperty(ref _penStyle, value);
+    }
+
     public PenSensitivity PenSensitivity
     {
         get => _penSensitivity;
         set => SetProperty(ref _penSensitivity, value);
     }
 
+    public SmoothingPresetOption SmoothingPreset
+    {
+        get => _smoothingPreset;
+        set => SetProperty(ref _smoothingPreset, value);
+    }
+
     public bool DynamicThicknessEnabled
     {
         get => _dynamicThicknessEnabled;
         set => SetProperty(ref _dynamicThicknessEnabled, value);
+    }
+
+    public bool VelocityBasedThicknessEnabled
+    {
+        get => _velocityBasedThicknessEnabled;
+        set => SetProperty(ref _velocityBasedThicknessEnabled, value);
+    }
+
+    public bool StrokeTaperEnabled
+    {
+        get => _strokeTaperEnabled;
+        set => SetProperty(ref _strokeTaperEnabled, value);
     }
 
     public bool FountainPenEffectEnabled
@@ -324,7 +365,7 @@ public sealed class SettingsViewModel : ViewModelBase
         set => SetProperty(ref _autoSaveInterval, value);
     }
 
-    public string CurrentVersion => CurrentVersionValue;
+    public string CurrentVersion => AppVersionInfo.CurrentDisplayVersion;
 
     public string ManifestVersion
     {
@@ -344,6 +385,18 @@ public sealed class SettingsViewModel : ViewModelBase
         set => SetProperty(ref _manifestNotes, value);
     }
 
+    public string ManifestDownloadUrl
+    {
+        get => _manifestDownloadUrl;
+        set => SetProperty(ref _manifestDownloadUrl, value);
+    }
+
+    public string ManifestSha256
+    {
+        get => _manifestSha256;
+        set => SetProperty(ref _manifestSha256, value);
+    }
+
     public string LastUpdatePackagePath
     {
         get => _lastUpdatePackagePath;
@@ -354,7 +407,7 @@ public sealed class SettingsViewModel : ViewModelBase
 
     public string PalmRejectionStatus => "Yakında";
 
-    public string UpdateFeatureNote => "Bu özellik tam güncelleme motoru sonraki sürümde aktif olacak.";
+    public string UpdateFeatureNote => "Güncelleştirme Merkezi paketi doğrular, ++PEN’i kapatır, yeni dosyaları kurar ve uygulamayı yeniden başlatır.";
 
     private void Save()
     {
@@ -406,64 +459,41 @@ public sealed class SettingsViewModel : ViewModelBase
             ManifestVersion = "Kontrol ediliyor...";
             ManifestMinVersion = "-";
             ManifestNotes = "Lütfen bekleyiniz...";
+            ManifestDownloadUrl = "-";
+            ManifestSha256 = "-";
 
-            var settings = _session.Settings;
-            var manifest = await _services.UpdatePackageService.FetchLatestFromUrlAsync(settings.UpdateFeedUrl);
+            var manifest = await _services.UpdatePackageService.FetchLatestFromUrlAsync(_session.Settings.UpdateFeedUrl);
+            ApplyManifest(manifest);
 
-            if (string.IsNullOrWhiteSpace(manifest.Version))
+            if (!_services.UpdatePackageService.IsNewerVersion(manifest.Version, AppVersionInfo.CurrentVersion))
             {
-                MessageBox.Show("Sürüm bilgisi alınamadı.", "++PEN", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Güncelleştirme yok. En yeni sürümü kullanıyorsunuz.", "++PEN", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
-            ManifestVersion = manifest.Version;
-            ManifestMinVersion = manifest.MinVersion;
-            ManifestNotes = manifest.Notes;
+            if (string.IsNullOrWhiteSpace(manifest.DownloadUrl))
+            {
+                throw new InvalidDataException("latest.json içinde indirme bağlantısı bulunamadı.");
+            }
 
-            // Mevcut versiyon ile karşılaştır
-            if (IsNewerVersion(manifest.Version, CurrentVersion))
+            if (!ConfirmUpdate(manifest))
             {
-                MessageBox.Show($"Yeni sürüm bulundu: {manifest.Version}", "++PEN", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
             }
-            else
-            {
-                MessageBox.Show("Güncelleştirme yok - halihazırda en yeni sürümü kullanıyorsunuz.", "++PEN", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
+
+            var packagePath = await _services.UpdatePackageService.DownloadPackageAsync(manifest);
+            _services.UpdatePackageService.ValidatePackageForInstall(packagePath, AppVersionInfo.CurrentVersion, manifest.Sha256);
+            LastUpdatePackagePath = packagePath;
+
+            StartUpdater(packagePath, manifest.Sha256);
         }
         catch (Exception ex)
         {
-            _services.LogService.LogError("İnternetten güncelleme kontrol edilirken hata oluştu.", ex);
-            ManifestVersion = "Hata: Bağlantı başarısız";
+            _services.LogService.LogError("İnternetten güncelleme alınamadı.", ex);
+            ManifestVersion = "Hata";
             ManifestMinVersion = "-";
-            ManifestNotes = $"Hata: {ex.Message}";
-            MessageBox.Show("İnternetten güncelleme bilgisi alınamadı.", "++PEN", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
-
-    private static bool IsNewerVersion(string newVersion, string currentVersion)
-    {
-        try
-        {
-            var newVer = newVersion.TrimStart('v');
-            var curVer = currentVersion.TrimStart('v');
-
-            var newParts = newVer.Split('.').Select(p => int.TryParse(p, out var i) ? i : 0).ToArray();
-            var curParts = curVer.Split('.').Select(p => int.TryParse(p, out var i) ? i : 0).ToArray();
-
-            for (int i = 0; i < Math.Max(newParts.Length, curParts.Length); i++)
-            {
-                var n = i < newParts.Length ? newParts[i] : 0;
-                var c = i < curParts.Length ? curParts[i] : 0;
-
-                if (n > c) return true;
-                if (n < c) return false;
-            }
-
-            return false;
-        }
-        catch
-        {
-            return false;
+            ManifestNotes = ex.Message;
+            MessageBox.Show($"Güncelleme başlatılamadı:\n{ex.Message}", "++PEN", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -483,15 +513,23 @@ public sealed class SettingsViewModel : ViewModelBase
         try
         {
             var manifest = _services.UpdatePackageService.ReadManifestFromZip(dialog.FileName);
+            _services.UpdatePackageService.ValidatePackageForInstall(dialog.FileName, AppVersionInfo.CurrentVersion);
+
             LastUpdatePackagePath = dialog.FileName;
-            ManifestVersion = manifest.Version;
-            ManifestMinVersion = manifest.MinVersion;
-            ManifestNotes = manifest.Notes;
+            ApplyManifest(manifest);
+
+            if (!ConfirmUpdate(manifest))
+            {
+                MessageBox.Show("Paket geçerli, güncelleme iptal edildi.", "++PEN", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            StartUpdater(dialog.FileName, null);
         }
         catch (Exception ex)
         {
             _services.LogService.LogError("Güncelleme paketi seçilirken hata oluştu.", ex);
-            MessageBox.Show("Seçilen güncelleme paketi geçersiz veya bozuk.", "++PEN", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show($"Seçilen güncelleme paketi kullanılamadı:\n{ex.Message}", "++PEN", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -576,10 +614,66 @@ public sealed class SettingsViewModel : ViewModelBase
             MessageBoxImage.Information);
     }
 
+    private void ApplyManifest(UpdateManifestModel manifest)
+    {
+        ManifestVersion = UpdatePackageService.FormatDisplayVersion(manifest.Version);
+        ManifestMinVersion = UpdatePackageService.FormatDisplayVersion(manifest.MinVersion);
+        ManifestNotes = manifest.Notes;
+        ManifestDownloadUrl = string.IsNullOrWhiteSpace(manifest.DownloadUrl) ? "-" : manifest.DownloadUrl;
+        ManifestSha256 = string.IsNullOrWhiteSpace(manifest.Sha256) ? "-" : manifest.Sha256;
+    }
+
+    private bool ConfirmUpdate(UpdateManifestModel manifest)
+    {
+        var message = "++PEN güncellenecek ve yeniden başlatılacak. Devam edilsin?";
+        if (_session.BackgroundSnapshot is not null || _session.Strokes.Count > 0)
+        {
+            message += "\n\nKaydedilmemiş çizimler olabilir.";
+        }
+
+        message += $"\n\nYeni sürüm: {UpdatePackageService.FormatDisplayVersion(manifest.Version)}";
+        return MessageBox.Show(message, "++PEN Güncelleştirme", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+    }
+
+    private void StartUpdater(string packagePath, string? expectedSha256)
+    {
+        try
+        {
+            var installDirectory = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var appExePath = Environment.ProcessPath
+                ?? Path.Combine(AppContext.BaseDirectory, "PlusPlusPen.exe");
+
+            _services.UpdaterLaunchService.Launch(
+                packagePath,
+                installDirectory,
+                appExePath,
+                Environment.ProcessId,
+                AppVersionInfo.CurrentVersion,
+                expectedSha256);
+
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            _services.LogService.LogError("Güncelleştirme Merkezi başlatılamadı.", ex);
+            MessageBox.Show($"Güncelleştirme Merkezi başlatılamadı:\n{ex.Message}", "++PEN", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private AppSettingsModel BuildSettingsModel()
     {
         var minThickness = Math.Min(MinimumStrokeThickness, MaximumStrokeThickness);
         var maxThickness = Math.Max(MinimumStrokeThickness, MaximumStrokeThickness);
+        var smoothingEnabled = SmoothingPreset != SmoothingPresetOption.Off;
+        var smoothingLevel = SmoothingPreset switch
+        {
+            SmoothingPresetOption.Low => 0.28,
+            SmoothingPresetOption.High => 0.9,
+            SmoothingPresetOption.Medium => 0.62,
+            _ => 0.05
+        };
+        var liveSmoothingEnabled = SmoothingPreset is SmoothingPresetOption.Medium or SmoothingPresetOption.High;
+        var fountainEffectEnabled = PenStyle is PenStyleOption.FountainPen or PenStyleOption.FeltTip;
 
         return new AppSettingsModel
         {
@@ -593,18 +687,22 @@ public sealed class SettingsViewModel : ViewModelBase
             AccentColorHex = AccentColorHex,
             ActiveToolColorHex = ActiveToolColorHex,
             DefaultThickness = DefaultThickness,
+            PenStyle = PenStyle,
             PenSensitivity = PenSensitivity,
+            SmoothingPreset = SmoothingPreset,
             DynamicThicknessEnabled = DynamicThicknessEnabled,
-            FountainPenEffectEnabled = FountainPenEffectEnabled,
+            VelocityBasedThicknessEnabled = VelocityBasedThicknessEnabled,
+            StrokeTaperEnabled = StrokeTaperEnabled,
+            FountainPenEffectEnabled = fountainEffectEnabled,
             PerformanceModeEnabled = PerformanceModeEnabled,
-            LiveSmoothingEnabled = LiveSmoothingEnabled,
-            SmoothingEnabled = SmoothingEnabled,
-            SmoothingLevel = Math.Clamp(SmoothingLevel / 100d, 0.05, 1.0),
+            LiveSmoothingEnabled = liveSmoothingEnabled,
+            SmoothingEnabled = smoothingEnabled,
+            SmoothingLevel = Math.Clamp(smoothingLevel, 0.05, 1.0),
             MinimumPointDistance = Math.Max(0.0, MinimumPointDistance),
             InterpolationLimit = Math.Max(1, InterpolationLimit),
             MinimumStrokeThickness = minThickness,
             MaximumStrokeThickness = maxThickness,
-            MouseSpeedAffectsThickness = MouseSpeedAffectsThickness,
+            MouseSpeedAffectsThickness = MouseSpeedAffectsThickness && VelocityBasedThicknessEnabled,
             StylusPressureEnabled = StylusPressureEnabled,
             PalmRejectionPlanned = PalmRejectionPlanned,
             EraserSize = EraserSize,
@@ -615,7 +713,8 @@ public sealed class SettingsViewModel : ViewModelBase
             FileNamePattern = FileNamePattern,
             AutoSaveEnabled = AutoSaveEnabled,
             AutoSaveInterval = AutoSaveInterval,
-            LastUpdatePackagePath = LastUpdatePackagePath
+            LastUpdatePackagePath = LastUpdatePackagePath,
+            UpdateFeedUrl = _session.Settings.UpdateFeedUrl
         };
     }
 

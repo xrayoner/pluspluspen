@@ -5,12 +5,39 @@
         Title="Overlay"
         WindowStyle="None"
         ResizeMode="NoResize"
-        Background="Black"
+        AllowsTransparency="True"
+        Background="Transparent"
         ShowInTaskbar="False"
         Topmost="True">
     <Grid Background="Transparent">
         <controls:DrawingSurfaceControl x:Name="DrawingSurface"
                                         Session="{Binding}"
                                         Focusable="True" />
+
+        <Grid IsHitTestVisible="False" Opacity="0">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Opacity" Value="0" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsModeTintVisible}" Value="True">
+                            <Setter Property="Opacity" Value="1" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+
+            <Rectangle Height="6"
+                       VerticalAlignment="Top"
+                       Fill="#FF4AB2FF" />
+            <Rectangle Height="6"
+                       VerticalAlignment="Bottom"
+                       Fill="#FF4AB2FF" />
+            <Rectangle Width="6"
+                       HorizontalAlignment="Left"
+                       Fill="#FF4AB2FF" />
+            <Rectangle Width="6"
+                       HorizontalAlignment="Right"
+                       Fill="#FF4AB2FF" />
+        </Grid>
     </Grid>
 </Window>

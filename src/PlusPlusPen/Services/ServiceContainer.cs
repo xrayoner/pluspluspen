@@ -22,6 +22,8 @@ public sealed class ServiceContainer
 
     public AutoSaveService AutoSaveService { get; private init; } = null!;
 
+    public UpdaterLaunchService UpdaterLaunchService { get; private init; } = null!;
+
     public static ServiceContainer Create()
     {
         var logService = new LogService();
@@ -31,6 +33,7 @@ public sealed class ServiceContainer
         var overlayService = new OverlayWindowService(sessionService, logService);
         var themeService = new AppThemeService();
         var updatePackageService = new UpdatePackageService(logService);
+        var updaterLaunchService = new UpdaterLaunchService(logService);
         var autoSaveService = new AutoSaveService(exportService, sessionService, logService);
 
         themeService.Apply(sessionService.Settings);
@@ -45,7 +48,8 @@ public sealed class ServiceContainer
             OverlayWindowService = overlayService,
             AppThemeService = themeService,
             UpdatePackageService = updatePackageService,
-            AutoSaveService = autoSaveService
+            AutoSaveService = autoSaveService,
+            UpdaterLaunchService = updaterLaunchService
         };
     }
 }

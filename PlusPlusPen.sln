@@ -4,6 +4,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PlusPlusPen", "src\PlusPlusPen\PlusPlusPen.csproj", "{A146FA59-55D4-41F4-8603-EA50CF75D39A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PlusPlusPen.Updater", "src\PlusPlusPen.Updater\PlusPlusPen.Updater.csproj", "{A6288BDA-48B6-45C1-B3E5-996754DB7558}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -14,6 +16,10 @@ Global
 		{A146FA59-55D4-41F4-8603-EA50CF75D39A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A146FA59-55D4-41F4-8603-EA50CF75D39A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A146FA59-55D4-41F4-8603-EA50CF75D39A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A6288BDA-48B6-45C1-B3E5-996754DB7558}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A6288BDA-48B6-45C1-B3E5-996754DB7558}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A6288BDA-48B6-45C1-B3E5-996754DB7558}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A6288BDA-48B6-45C1-B3E5-996754DB7558}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

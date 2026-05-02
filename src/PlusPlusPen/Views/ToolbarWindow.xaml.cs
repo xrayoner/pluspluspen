@@ -1,7 +1,7 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Interop;
 using System.Windows.Media;
 using PlusPlusPen.Models;
 using PlusPlusPen.Services;
@@ -11,20 +11,15 @@ namespace PlusPlusPen.Views;
 
 public partial class ToolbarWindow : Window
 {
-    private const int WmLButtonDown = 0x0201;
-    private const int WmLButtonUp = 0x0202;
-    private const int WmMouseMove = 0x0200;
-    private const int MkLButton = 0x0001;
     private readonly ServiceContainer? _services;
-    private bool _titleMouseDown;
-    private Point _titleDownPoint;
+    private bool _dragPending;
+    private Point _dragStartPoint;
 
     public ToolbarWindow()
     {
         InitializeComponent();
         Left = SystemParameters.WorkArea.Left + 30;
         Top = SystemParameters.WorkArea.Top + 60;
-        SourceInitialized += HandleSourceInitialized;
     }
 
     public ToolbarWindow(ServiceContainer services)
@@ -38,64 +33,79 @@ public partial class ToolbarWindow : Window
         Opacity = Math.Clamp(settings.PanelOpacity, 0.2, 1.0);
         Topmost = settings.KeepPanelOnTop;
 
-        PanelRoot.Width = settings.PanelSize switch
+        var scale = settings.PanelSize switch
         {
-            PanelSizeOption.Small => 132,
-            PanelSizeOption.Large => 156,
-            _ => 142
+            PanelSizeOption.Small => 0.9,
+            PanelSizeOption.Large => 1.18,
+            _ => 1.0
         };
+
+        PanelScale.ScaleX = scale;
+        PanelScale.ScaleY = scale;
     }
 
-    private void HandleSourceInitialized(object? sender, EventArgs e)
+    private void HandleToolbarLoaded(object sender, RoutedEventArgs e)
     {
-        if (PresentationSource.FromVisual(this) is HwndSource source)
+        LogDebug("Toolbar loaded");
+    }
+
+    private void HandleWindowPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control
+            && e.Key == Key.OemComma)
         {
-            source.AddHook(HandleWindowMessage);
+            OpenSettingsWindow();
+            e.Handled = true;
         }
     }
 
-    private IntPtr HandleWindowMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    private void DragSurface_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        var point = GetClientPoint(lParam);
-        switch (message)
+        if (IsInteractiveSource(e.OriginalSource as DependencyObject))
         {
-            case WmLButtonDown when IsInTitleArea(point):
-                _titleMouseDown = true;
-                _titleDownPoint = point;
-                handled = true;
-                break;
-            case WmMouseMove when _titleMouseDown && (((int)wParam & MkLButton) == MkLButton):
-                if (Math.Abs(point.X - _titleDownPoint.X) >= SystemParameters.MinimumHorizontalDragDistance
-                    || Math.Abs(point.Y - _titleDownPoint.Y) >= SystemParameters.MinimumVerticalDragDistance)
-                {
-                    _titleMouseDown = false;
-                    handled = true;
-                    DragMove();
-                }
-                break;
-            case WmLButtonUp when _titleMouseDown:
-                _titleMouseDown = false;
-                handled = true;
-                Dispatcher.BeginInvoke(OpenSettingsFromLogo);
-                break;
+            return;
         }
 
-        return IntPtr.Zero;
+        LogDebug("Drag surface mouse down");
+        _dragPending = true;
+        _dragStartPoint = e.GetPosition(this);
+        DragSurface.CaptureMouse();
+        e.Handled = true;
     }
 
-    private Point GetClientPoint(IntPtr lParam)
+    private void DragSurface_MouseMove(object sender, MouseEventArgs e)
     {
-        var x = unchecked((short)((long)lParam & 0xFFFF));
-        var y = unchecked((short)(((long)lParam >> 16) & 0xFFFF));
-        return new Point(x, y);
+        if (!_dragPending || e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var point = e.GetPosition(this);
+        if (Math.Abs(point.X - _dragStartPoint.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(point.Y - _dragStartPoint.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        _dragPending = false;
+        DragSurface.ReleaseMouseCapture();
+        DragMove();
+        e.Handled = true;
     }
 
-    private bool IsInTitleArea(Point point)
+    private void DragSurface_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        return point.X >= 0 && point.Y >= 0 && point.Y <= 34;
+        _dragPending = false;
+        DragSurface.ReleaseMouseCapture();
+        e.Handled = true;
     }
 
-    private void OpenSettingsFromLogo()
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        OpenSettingsWindow();
+    }
+
+    private void OpenSettingsWindow()
     {
         if (_services is null)
         {
@@ -106,7 +116,13 @@ public partial class ToolbarWindow : Window
         {
             if (Application.Current.Windows.OfType<SettingsWindow>().FirstOrDefault() is SettingsWindow existing)
             {
+                if (existing.WindowState == WindowState.Minimized)
+                {
+                    existing.WindowState = WindowState.Normal;
+                }
+
                 existing.Activate();
+                existing.Focus();
                 return;
             }
 
@@ -116,29 +132,16 @@ public partial class ToolbarWindow : Window
                 DataContext = new SettingsViewModel(_services)
             };
             window.Show();
+            window.Activate();
         }
         catch (Exception ex)
         {
-            _services.LogService.LogError("Ayarlar penceresi açılamadı.", ex);
-            MessageBox.Show("Ayarlar penceresi açılamadı. Ayrıntılar log dosyasına yazıldı.", "++PEN", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _services.LogService.LogError("Ayarlar penceresi acilamadi.", ex);
+            MessageBox.Show("Ayarlar penceresi acilamadi. Ayrintilar log dosyasina yazildi.", "++PEN", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
-    private void HandlePanelMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        var source = e.OriginalSource as DependencyObject;
-        if (e.LeftButton != MouseButtonState.Pressed
-            || IsInsideButton(source)
-            || IsInsideElement(source, TitleDragArea))
-        {
-            return;
-        }
-
-        DragMove();
-        e.Handled = true;
-    }
-
-    private static bool IsInsideButton(DependencyObject? source)
+    private static bool IsInteractiveSource(DependencyObject? source)
     {
         while (source is not null)
         {
@@ -153,18 +156,9 @@ public partial class ToolbarWindow : Window
         return false;
     }
 
-    private static bool IsInsideElement(DependencyObject? source, DependencyObject target)
+    [Conditional("DEBUG")]
+    private static void LogDebug(string message)
     {
-        while (source is not null)
-        {
-            if (ReferenceEquals(source, target))
-            {
-                return true;
-            }
-
-            source = VisualTreeHelper.GetParent(source);
-        }
-
-        return false;
+        Debug.WriteLine($"[++PEN][Input] {message}");
     }
 }

@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:viewModels="clr-namespace:PlusPlusPen.ViewModels"
         Title="++PEN Ayarlar"
+        Icon="/Assets/AppIcon.ico"
         Width="760"
         Height="680"
         MinWidth="760"
@@ -116,20 +117,30 @@
                                     Value="{Binding DefaultThickness}" />
                             <TextBlock Text="{Binding DefaultThickness, StringFormat=F1}" HorizontalAlignment="Right" />
 
+                            <TextBlock Margin="0,18,0,0" Text="Kalem stili" FontWeight="SemiBold" />
+                            <ComboBox Margin="0,6,0,0"
+                                      ItemsSource="{Binding PenStyleOptions}"
+                                      SelectedItem="{Binding PenStyle}" />
+
                             <TextBlock Margin="0,18,0,0" Text="Kalem hassasiyeti" FontWeight="SemiBold" />
                             <ComboBox Margin="0,6,0,0"
                                       ItemsSource="{Binding PenSensitivityOptions}"
                                       SelectedItem="{Binding PenSensitivity}" />
 
+                            <TextBlock Margin="0,18,0,0" Text="Smoothing seviyesi" FontWeight="SemiBold" />
+                            <ComboBox Margin="0,6,0,0"
+                                      ItemsSource="{Binding SmoothingPresetOptions}"
+                                      SelectedItem="{Binding SmoothingPreset}" />
+
                             <CheckBox Margin="0,18,0,0"
                                       Content="Dinamik kalınlık açık"
                                       IsChecked="{Binding DynamicThicknessEnabled}" />
                             <CheckBox Margin="0,8,0,0"
-                                      Content="Dolma kalem efekti açık"
-                                      IsChecked="{Binding FountainPenEffectEnabled}" />
+                                      Content="Hız bazlı kalınlık açık"
+                                      IsChecked="{Binding VelocityBasedThicknessEnabled}" />
                             <CheckBox Margin="0,8,0,0"
-                                      Content="Smoothing açık"
-                                      IsChecked="{Binding SmoothingEnabled}" />
+                                      Content="Baş/son inceltme açık"
+                                      IsChecked="{Binding StrokeTaperEnabled}" />
 
                             <TextBlock Margin="0,18,0,0" Text="Performans modu" FontWeight="SemiBold" />
                             <CheckBox Margin="0,6,0,0"
@@ -140,18 +151,6 @@
                             <CheckBox Margin="0,6,0,0"
                                       Content="Canlı hareket sırasında smoothing uygula"
                                       IsChecked="{Binding LiveSmoothingEnabled}" />
-
-                            <TextBlock Margin="0,18,0,0" Text="Stroke sonu smoothing" FontWeight="SemiBold" />
-                            <CheckBox Margin="0,6,0,0"
-                                      Content="Çizim bitince smoothing uygula"
-                                      IsChecked="{Binding SmoothingEnabled}" />
-
-                            <TextBlock Margin="0,18,0,0" Text="Smoothing seviyesi (%)" FontWeight="SemiBold" />
-                            <Slider Margin="0,6,0,0"
-                                    Minimum="5"
-                                    Maximum="100"
-                                    Value="{Binding SmoothingLevel}" />
-                            <TextBlock Text="{Binding SmoothingLevel, StringFormat=F0}" HorizontalAlignment="Right" />
 
                             <TextBlock Margin="0,18,0,0" Text="Minimum nokta mesafesi (px)" FontWeight="SemiBold" />
                             <Slider Margin="0,6,0,0"
@@ -180,7 +179,7 @@
                                     Value="{Binding MaximumStrokeThickness}" />
 
                             <CheckBox Margin="0,18,0,0"
-                                      Content="Mouse hızıyla kalınlık değişimi"
+                                      Content="Mouse hızından etkilen"
                                       IsChecked="{Binding MouseSpeedAffectsThickness}" />
                             <CheckBox Margin="0,8,0,0"
                                       Content="Stylus pressure desteği"
@@ -289,11 +288,17 @@
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
                                 <TextBlock Text="manifest version:" FontWeight="SemiBold" />
                                 <TextBlock Grid.Column="1" Text="{Binding ManifestVersion}" />
                                 <TextBlock Grid.Row="1" Text="manifest minVersion:" FontWeight="SemiBold" Margin="0,8,0,0" />
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ManifestMinVersion}" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="2" Text="downloadUrl:" FontWeight="SemiBold" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ManifestDownloadUrl}" Margin="0,8,0,0" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="3" Text="sha256:" FontWeight="SemiBold" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ManifestSha256}" Margin="0,8,0,0" TextWrapping="Wrap" />
                             </Grid>
 
                             <TextBlock Margin="0,18,0,0" Text="Notlar" FontWeight="SemiBold" />
@@ -339,7 +344,7 @@
                                 <StackPanel>
                                     <TextBlock Text="Kaldırma bilgisi" FontWeight="Bold" />
                                     <TextBlock Margin="0,8,0,0"
-                                               Text="++PEN’i kaldırmak için Windows Ayarları > Uygulamalar bölümünü kullanın."
+                                               Text="++PEN’i kaldırmak için Windows Ayarları &gt; Uygulamalar bölümünü kullanın."
                                                TextWrapping="Wrap" />
                                     <Button Margin="0,10,0,0"
                                             Width="180"

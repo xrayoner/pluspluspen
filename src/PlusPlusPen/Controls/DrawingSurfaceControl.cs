@@ -11,7 +11,10 @@ namespace PlusPlusPen.Controls;
 
 public sealed class DrawingSurfaceControl : FrameworkElement
 {
-    private const int EraserCommitIntervalMs = 20;
+    private const int EraserCommitIntervalMs = 33;
+    private const int CacheRebuildThrottleMs = 33;
+    private const double MinimumEraserFragmentLength = 1.5;
+
     public static readonly DependencyProperty SessionProperty =
         DependencyProperty.Register(
             nameof(Session),
@@ -21,6 +24,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
 
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
     private readonly Queue<(Point point, long ticks)> _smoothingWindow = new();
+    private readonly List<EraserStrokeHitEntry> _eraserHitEntries = [];
     private RenderTargetBitmap? _committedStrokeCache;
     private StrokeModel? _activeStroke;
     private Size _cacheRenderSize;
@@ -31,17 +35,23 @@ public sealed class DrawingSurfaceControl : FrameworkElement
     private bool _isDrawing;
     private bool _eraserSnapshotTaken;
     private Point? _hoverPoint;
+    private int? _activeTouchId;
     private bool _cacheDirty = true;
+    private bool _cacheRefreshScheduled;
+    private long _lastCacheRebuildTicks;
     private long _lastEraserCommitTicks;
     private bool _eraserDirtySinceCommit;
     private Point? _lastEraserPoint;
-    private readonly List<EraserStrokeHitEntry> _eraserHitEntries = [];
-    private const double MinimumEraserFragmentLength = 1.5;
 
     public DrawingSessionService? Session
     {
         get => (DrawingSessionService?)GetValue(SessionProperty);
         set => SetValue(SessionProperty, value);
+    }
+
+    public DrawingSurfaceControl()
+    {
+        IsManipulationEnabled = false;
     }
 
     protected override void OnRender(DrawingContext drawingContext)
@@ -59,26 +69,36 @@ public sealed class DrawingSurfaceControl : FrameworkElement
             drawingContext.DrawImage(Session.BackgroundSnapshot, new Rect(new Point(0, 0), RenderSize));
         }
 
-        EnsureCommittedStrokeCache();
-        if (_committedStrokeCache is not null)
+        if (IsRenderingLiveEraserState())
         {
-            drawingContext.DrawImage(_committedStrokeCache, new Rect(new Point(0, 0), RenderSize));
+            DrawLiveEraserState(drawingContext);
+        }
+        else
+        {
+            EnsureCommittedStrokeCache();
+            if (_committedStrokeCache is not null)
+            {
+                drawingContext.DrawImage(_committedStrokeCache, new Rect(new Point(0, 0), RenderSize));
+            }
         }
 
         if (_activeStroke is not null)
         {
-            StrokeRenderHelper.DrawStroke(drawingContext, _activeStroke);
+            StrokeRenderHelper.DrawStroke(
+                drawingContext,
+                _activeStroke,
+                options: StrokeRenderHelper.CreateRenderOptions(Session.Settings, isLivePreview: true));
         }
 
         if (Session.ActiveTool == ToolKind.Eraser && _hoverPoint is not null)
         {
             var radius = GetEraserRadius();
-            var previewPen = new Pen(new SolidColorBrush(Color.FromArgb(220, 60, 189, 91)), 1.4)
+            var previewPen = new Pen(new SolidColorBrush(Color.FromArgb(240, 52, 176, 255)), 2.0)
             {
-                DashStyle = DashStyles.Solid
+                DashStyle = DashStyles.Dash
             };
             drawingContext.DrawEllipse(
-                new SolidColorBrush(Color.FromArgb(32, 60, 189, 91)),
+                new SolidColorBrush(Color.FromArgb(42, 92, 206, 255)),
                 previewPen,
                 _hoverPoint.Value,
                 radius,
@@ -89,7 +109,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
     protected override void OnMouseDown(MouseButtonEventArgs e)
     {
         base.OnMouseDown(e);
-        if (Session is null || e.LeftButton != MouseButtonState.Pressed)
+        if (_activeTouchId is not null || Session is null || e.LeftButton != MouseButtonState.Pressed)
         {
             return;
         }
@@ -103,6 +123,11 @@ public sealed class DrawingSurfaceControl : FrameworkElement
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
+        if (_activeTouchId is not null)
+        {
+            return;
+        }
+
         if (!_isDrawing || Session is null || e.LeftButton != MouseButtonState.Pressed)
         {
             if (Session?.ActiveTool == ToolKind.Eraser)
@@ -110,6 +135,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
                 _hoverPoint = e.GetPosition(this);
                 InvalidateVisual();
             }
+
             return;
         }
 
@@ -120,6 +146,11 @@ public sealed class DrawingSurfaceControl : FrameworkElement
     protected override void OnMouseUp(MouseButtonEventArgs e)
     {
         base.OnMouseUp(e);
+        if (_activeTouchId is not null)
+        {
+            return;
+        }
+
         if (!_isDrawing)
         {
             return;
@@ -132,7 +163,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
     protected override void OnStylusDown(StylusDownEventArgs e)
     {
         base.OnStylusDown(e);
-        if (Session is null)
+        if (_activeTouchId is not null || Session is null)
         {
             return;
         }
@@ -148,6 +179,11 @@ public sealed class DrawingSurfaceControl : FrameworkElement
     protected override void OnStylusMove(StylusEventArgs e)
     {
         base.OnStylusMove(e);
+        if (_activeTouchId is not null)
+        {
+            return;
+        }
+
         if (!_isDrawing || Session is null)
         {
             if (Session?.ActiveTool == ToolKind.Eraser)
@@ -155,6 +191,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
                 _hoverPoint = e.GetPosition(this);
                 InvalidateVisual();
             }
+
             return;
         }
 
@@ -167,6 +204,11 @@ public sealed class DrawingSurfaceControl : FrameworkElement
     protected override void OnStylusUp(StylusEventArgs e)
     {
         base.OnStylusUp(e);
+        if (_activeTouchId is not null)
+        {
+            return;
+        }
+
         if (!_isDrawing)
         {
             return;
@@ -174,6 +216,74 @@ public sealed class DrawingSurfaceControl : FrameworkElement
 
         EndInteraction();
         e.Handled = true;
+    }
+
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+        _hoverPoint = null;
+        InvalidateVisual();
+    }
+
+    protected override void OnTouchDown(TouchEventArgs e)
+    {
+        base.OnTouchDown(e);
+        if (Session is null)
+        {
+            return;
+        }
+
+        if (_activeTouchId is not null && _activeTouchId != e.TouchDevice.Id)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        _activeTouchId = e.TouchDevice.Id;
+        CaptureTouch(e.TouchDevice);
+        Focus();
+        StartInteraction(e.GetTouchPoint(this).Position, 0.5f);
+        e.Handled = true;
+    }
+
+    protected override void OnTouchMove(TouchEventArgs e)
+    {
+        base.OnTouchMove(e);
+        if (_activeTouchId != e.TouchDevice.Id)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (!_isDrawing || Session is null)
+        {
+            return;
+        }
+
+        ContinueInteraction(e.GetTouchPoint(this).Position, null);
+        e.Handled = true;
+    }
+
+    protected override void OnTouchUp(TouchEventArgs e)
+    {
+        base.OnTouchUp(e);
+        if (_activeTouchId != e.TouchDevice.Id)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        EndInteraction();
+        ReleaseTouchCapture(e.TouchDevice);
+        _activeTouchId = null;
+        e.Handled = true;
+    }
+
+    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+    {
+        base.OnRenderSizeChanged(sizeInfo);
+        _cacheDirty = true;
+        InvalidateVisual();
     }
 
     private static void OnSessionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -195,6 +305,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
     {
         _cacheDirty = true;
         InvalidateVisual();
+        ScheduleDeferredCacheRefresh();
     }
 
     private void StartInteraction(Point rawPoint, float pressure)
@@ -239,7 +350,10 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         }
         else
         {
+            var stopwatch = Stopwatch.StartNew();
             ContinueEraserStroke(rawPoint);
+            stopwatch.Stop();
+            LogDebug($"Eraser move processing: {stopwatch.Elapsed.TotalMilliseconds:F2} ms");
             InvalidateVisual();
         }
     }
@@ -248,10 +362,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
     {
         if (Session is not null && Session.ActiveTool == ToolKind.Pen && _activeStroke is { Points.Count: > 0 })
         {
-            if (Session.Settings.SmoothingEnabled)
-            {
-                _activeStroke = SmoothCompletedStroke(_activeStroke, Session.Settings.SmoothingLevel);
-            }
+            _activeStroke = FinalizeCompletedStroke(_activeStroke, Session.Settings);
 
             Session.PushHistorySnapshot();
             Session.AddStroke(_activeStroke);
@@ -261,10 +372,13 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         {
             FlushEraserChanges(force: true);
             Session.RaiseStateSignals();
+            _cacheDirty = true;
+            InvalidateVisual();
         }
 
         _activeStroke = null;
         _isDrawing = false;
+        _activeTouchId = null;
         _smoothingWindow.Clear();
         ClearEraserState();
 
@@ -290,15 +404,13 @@ public sealed class DrawingSurfaceControl : FrameworkElement
 
         var now = _stopwatch.ElapsedMilliseconds;
         _smoothingWindow.Enqueue((rawPoint, now));
-        var smoothingCount = Session.Settings.LiveSmoothingEnabled
-            ? Math.Clamp((int)Math.Round(1 + Session.Settings.SmoothingLevel * 4), 1, 6)
-            : 1;
+        var smoothingCount = GetLiveSmoothingSampleCount(Session.Settings);
         while (_smoothingWindow.Count > smoothingCount)
         {
             _smoothingWindow.Dequeue();
         }
 
-        var targetPoint = Session.Settings.LiveSmoothingEnabled ? AveragePoint(_smoothingWindow) : rawPoint;
+        var targetPoint = smoothingCount > 1 ? AveragePoint(_smoothingWindow) : rawPoint;
         if (!isFirst && ShouldSkipSample(targetPoint, now))
         {
             return false;
@@ -325,6 +437,15 @@ public sealed class DrawingSurfaceControl : FrameworkElement
             return Math.Clamp(baseWidth, Session.Settings.MinimumStrokeThickness, Session.Settings.MaximumStrokeThickness);
         }
 
+        var styleBaseMultiplier = Session.Settings.PenStyle switch
+        {
+            PenStyleOption.Soft => 1.04,
+            PenStyleOption.FountainPen => 1.14,
+            PenStyleOption.FeltTip => 1.2,
+            _ => 1.0
+        };
+        baseWidth *= styleBaseMultiplier;
+
         if (Session.Settings.StylusPressureEnabled && Stylus.CurrentStylusDevice is not null)
         {
             var penFactor = Session.Settings.PenSensitivity switch
@@ -339,29 +460,25 @@ public sealed class DrawingSurfaceControl : FrameworkElement
                 width *= 1.08;
             }
 
+            if (Session.Settings.VelocityBasedThicknessEnabled && !isFirst)
+            {
+                width *= CalculateVelocityFactor(point, ticks, 0.06);
+            }
+
             return Math.Clamp(width, Session.Settings.MinimumStrokeThickness, Session.Settings.MaximumStrokeThickness);
         }
 
-        if (isFirst)
+        if (isFirst || !Session.Settings.MouseSpeedAffectsThickness || !Session.Settings.VelocityBasedThicknessEnabled)
         {
             return Math.Clamp(baseWidth, Session.Settings.MinimumStrokeThickness, Session.Settings.MaximumStrokeThickness);
         }
 
-        if (!Session.Settings.MouseSpeedAffectsThickness)
-        {
-            return Math.Clamp(baseWidth, Session.Settings.MinimumStrokeThickness, Session.Settings.MaximumStrokeThickness);
-        }
-
-        var distance = (point - _lastPoint).Length;
-        var delta = Math.Max(1, ticks - _lastTicks);
-        var speed = distance / delta;
-        var sensitivity = Session.Settings.PenSensitivity switch
+        var speedFactor = CalculateVelocityFactor(point, ticks, Session.Settings.PenSensitivity switch
         {
             PenSensitivity.Low => 0.08,
             PenSensitivity.High => 0.18,
             _ => 0.12
-        };
-        var speedFactor = Math.Clamp(1.6 - speed * sensitivity, 0.65, 1.55);
+        });
         var result = baseWidth * speedFactor;
         if (Session.Settings.FountainPenEffectEnabled)
         {
@@ -423,42 +540,26 @@ public sealed class DrawingSurfaceControl : FrameworkElement
                 continue;
             }
 
-            double minX = double.PositiveInfinity;
-            double minY = double.PositiveInfinity;
-            double maxX = double.NegativeInfinity;
-            double maxY = double.NegativeInfinity;
+            stroke.RecalculateBounds();
             var segments = new List<EraserSegment>(Math.Max(1, stroke.Points.Count - 1));
-
-            for (var pointIndex = 0; pointIndex < stroke.Points.Count; pointIndex++)
+            for (var pointIndex = 1; pointIndex < stroke.Points.Count; pointIndex++)
             {
-                var point = stroke.Points[pointIndex];
-                var halfWidth = point.Width * 0.5;
-                minX = Math.Min(minX, point.Position.X - halfWidth);
-                minY = Math.Min(minY, point.Position.Y - halfWidth);
-                maxX = Math.Max(maxX, point.Position.X + halfWidth);
-                maxY = Math.Max(maxY, point.Position.Y + halfWidth);
-
-                if (pointIndex == 0)
-                {
-                    continue;
-                }
-
                 var previous = stroke.Points[pointIndex - 1];
+                var point = stroke.Points[pointIndex];
                 var radius = Math.Max(previous.Width, point.Width) * 0.5;
                 segments.Add(new EraserSegment(previous.Position, point.Position, radius));
             }
 
-            var bounds = CreateBoundsFromExtrema(minX, minY, maxX, maxY);
-            _eraserHitEntries.Add(new EraserStrokeHitEntry(stroke, bounds, segments));
+            _eraserHitEntries.Add(new EraserStrokeHitEntry(stroke, stroke.Bounds, segments));
         }
     }
 
     private void SampleEraserPath(Point point)
     {
-        var radius = GetEraserRadius();
+        var eraserRadius = GetEraserRadius();
         if (_lastEraserPoint is null)
         {
-            TestEraserPoint(point, radius);
+            TestEraserPoint(point, eraserRadius);
             _lastEraserPoint = point;
             return;
         }
@@ -468,20 +569,20 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         var distance = delta.Length;
         if (distance <= 0.01)
         {
-            TestEraserPoint(point, radius);
+            TestEraserPoint(point, eraserRadius);
             _lastEraserPoint = point;
             return;
         }
 
-        var spacing = Math.Max(1.2, radius * 0.45);
-        var steps = Math.Max(1, (int)Math.Ceiling(distance / spacing));
+        var spacing = Math.Max(1.0, eraserRadius * 0.5);
+        var steps = Math.Clamp((int)Math.Ceiling(distance / spacing), 1, 24);
         for (var step = 1; step <= steps; step++)
         {
             var t = step / (double)steps;
             var sample = new Point(
                 Lerp(start.X, point.X, t),
                 Lerp(start.Y, point.Y, t));
-            TestEraserPoint(sample, radius);
+            TestEraserPoint(sample, eraserRadius);
         }
 
         _lastEraserPoint = point;
@@ -498,12 +599,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         for (var index = 0; index < _eraserHitEntries.Count; index++)
         {
             var entry = _eraserHitEntries[index];
-            if (entry.Fragments.Count == 0)
-            {
-                continue;
-            }
-
-            if (!entry.Bounds.IntersectsWith(searchBounds))
+            if (entry.Fragments.Count == 0 || !entry.Bounds.IntersectsWith(searchBounds))
             {
                 continue;
             }
@@ -527,6 +623,16 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         var updatedFragments = new List<StrokeModel>(entry.Fragments.Count);
         foreach (var fragment in entry.Fragments)
         {
+            if (!fragment.Bounds.IntersectsWith(new Rect(
+                    eraserCenter.X - eraserRadius,
+                    eraserCenter.Y - eraserRadius,
+                    eraserRadius * 2,
+                    eraserRadius * 2)))
+            {
+                updatedFragments.Add(fragment);
+                continue;
+            }
+
             var split = SplitFragmentByEraser(fragment, eraserCenter, eraserRadius);
             if (split.FragmentChanged)
             {
@@ -548,31 +654,12 @@ public sealed class DrawingSurfaceControl : FrameworkElement
 
     private void FlushEraserChanges(bool force)
     {
-        if (Session is null)
+        if (Session is null || (!force && !_eraserDirtySinceCommit))
         {
             return;
         }
 
-        if (!force && !_eraserDirtySinceCommit)
-        {
-            return;
-        }
-
-        var activeStrokeCount = 0;
-        foreach (var entry in _eraserHitEntries)
-        {
-            activeStrokeCount += entry.Fragments.Count;
-        }
-
-        if (activeStrokeCount == 0)
-        {
-            Session.ReplaceStrokes([]);
-            _lastEraserCommitTicks = _stopwatch.ElapsedMilliseconds;
-            _eraserDirtySinceCommit = false;
-            return;
-        }
-
-        var replacement = new List<StrokeModel>(activeStrokeCount);
+        var replacement = new List<StrokeModel>();
         foreach (var entry in _eraserHitEntries)
         {
             if (entry.Fragments.Count == 0)
@@ -586,6 +673,17 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         Session.ReplaceStrokes(replacement);
         _lastEraserCommitTicks = _stopwatch.ElapsedMilliseconds;
         _eraserDirtySinceCommit = false;
+        _cacheDirty = true;
+        _committedStrokeCache = null;
+
+        if (force)
+        {
+            _lastCacheRebuildTicks = 0;
+        }
+        else
+        {
+            ScheduleDeferredCacheRefresh();
+        }
     }
 
     private void ClearEraserState()
@@ -658,10 +756,10 @@ public sealed class DrawingSurfaceControl : FrameworkElement
             current ??= new StrokeModel(fragment.Color);
             if (current.Points.Count == 0)
             {
-                current.Points.Add(new StrokePointModel(previous.Position, previous.Width));
+                current.AppendPoint(new StrokePointModel(previous.Position, previous.Width));
             }
 
-            current.Points.Add(new StrokePointModel(next.Position, next.Width));
+            current.AppendPoint(new StrokePointModel(next.Position, next.Width));
         }
 
         if (current is not null)
@@ -690,54 +788,19 @@ public sealed class DrawingSurfaceControl : FrameworkElement
             return;
         }
 
+        candidate.RecalculateBounds();
         output.Add(candidate);
     }
 
     private static Rect CreateBoundsForStrokes(IEnumerable<StrokeModel> strokes)
     {
-        var hasValue = false;
-        double minX = double.PositiveInfinity;
-        double minY = double.PositiveInfinity;
-        double maxX = double.NegativeInfinity;
-        double maxY = double.NegativeInfinity;
-
+        var bounds = Rect.Empty;
         foreach (var stroke in strokes)
         {
-            foreach (var point in stroke.Points)
-            {
-                var halfWidth = point.Width * 0.5;
-                minX = Math.Min(minX, point.Position.X - halfWidth);
-                minY = Math.Min(minY, point.Position.Y - halfWidth);
-                maxX = Math.Max(maxX, point.Position.X + halfWidth);
-                maxY = Math.Max(maxY, point.Position.Y + halfWidth);
-                hasValue = true;
-            }
+            bounds = bounds.IsEmpty ? stroke.Bounds : Rect.Union(bounds, stroke.Bounds);
         }
 
-        return hasValue
-            ? CreateBoundsFromExtrema(minX, minY, maxX, maxY)
-            : Rect.Empty;
-    }
-
-    private static Rect CreateBoundsFromExtrema(double minX, double minY, double maxX, double maxY)
-    {
-        var width = Math.Max(0.1, maxX - minX);
-        var height = Math.Max(0.1, maxY - minY);
-        return new Rect(minX, minY, width, height);
-    }
-
-    protected override void OnMouseLeave(MouseEventArgs e)
-    {
-        base.OnMouseLeave(e);
-        _hoverPoint = null;
-        InvalidateVisual();
-    }
-
-    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
-    {
-        base.OnRenderSizeChanged(sizeInfo);
-        _cacheDirty = true;
-        InvalidateVisual();
+        return bounds;
     }
 
     private void AppendInterpolatedPoints(Point targetPoint, double targetWidth, bool isFirst)
@@ -749,7 +812,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
 
         if (isFirst || _activeStroke.Points.Count == 0)
         {
-            _activeStroke.Points.Add(new StrokePointModel(targetPoint, targetWidth));
+            _activeStroke.AppendPoint(new StrokePointModel(targetPoint, targetWidth));
             return;
         }
 
@@ -766,7 +829,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
                 Lerp(previous.Position.X, targetPoint.X, t),
                 Lerp(previous.Position.Y, targetPoint.Y, t));
             var interpolatedWidth = Lerp(previous.Width, targetWidth, t);
-            _activeStroke.Points.Add(new StrokePointModel(interpolatedPoint, interpolatedWidth));
+            _activeStroke.AppendPoint(new StrokePointModel(interpolatedPoint, interpolatedWidth));
         }
     }
 
@@ -775,29 +838,78 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         return start + (end - start) * amount;
     }
 
-    private static StrokeModel SmoothCompletedStroke(StrokeModel stroke, double smoothingLevel)
+    private bool IsRenderingLiveEraserState()
+    {
+        return Session is not null
+            && _isDrawing
+            && Session.ActiveTool == ToolKind.Eraser
+            && _eraserHitEntries.Count > 0;
+    }
+
+    private void DrawLiveEraserState(DrawingContext drawingContext)
+    {
+        if (Session is null)
+        {
+            return;
+        }
+
+        var options = StrokeRenderHelper.CreateRenderOptions(Session.Settings, isLivePreview: false);
+        foreach (var entry in _eraserHitEntries)
+        {
+            foreach (var fragment in entry.Fragments)
+            {
+                StrokeRenderHelper.DrawStroke(drawingContext, fragment, options: options);
+            }
+        }
+    }
+
+    private static StrokeModel FinalizeCompletedStroke(StrokeModel stroke, AppSettingsModel settings)
     {
         if (stroke.Points.Count < 3)
         {
             return stroke.Clone();
         }
 
-        var smoothed = new StrokeModel(stroke.Color);
-        smoothed.Points.Add(new StrokePointModel(stroke.Points[0].Position, stroke.Points[0].Width));
-
-        var smoothingFactor = Math.Clamp(smoothingLevel * 0.35, 0.1, 0.4);
-        for (var index = 1; index < stroke.Points.Count - 1; index++)
+        if (settings.SmoothingPreset == SmoothingPresetOption.Off && !settings.StrokeTaperEnabled)
         {
-            var previous = stroke.Points[index - 1];
-            var current = stroke.Points[index];
-            var next = stroke.Points[index + 1];
-            var x = previous.Position.X * smoothingFactor + current.Position.X * (1 - 2 * smoothingFactor) + next.Position.X * smoothingFactor;
-            var y = previous.Position.Y * smoothingFactor + current.Position.Y * (1 - 2 * smoothingFactor) + next.Position.Y * smoothingFactor;
-            var width = (previous.Width + current.Width + next.Width) / 3.0;
-            smoothed.Points.Add(new StrokePointModel(new Point(x, y), width));
+            return stroke.Clone();
         }
 
-        smoothed.Points.Add(new StrokePointModel(stroke.Points[^1].Position, stroke.Points[^1].Width));
+        var passCount = settings.SmoothingPreset switch
+        {
+            SmoothingPresetOption.Low => 1,
+            SmoothingPresetOption.High => 3,
+            SmoothingPresetOption.Medium => 2,
+            _ => 0
+        };
+
+        if (settings.PenStyle is PenStyleOption.Soft or PenStyleOption.FountainPen)
+        {
+            passCount++;
+        }
+
+        var sourcePoints = stroke.Points
+            .Select(point => new StrokePointModel(point.Position, point.Width))
+            .ToList();
+        var smoothingFactor = settings.SmoothingPreset switch
+        {
+            SmoothingPresetOption.Low => 0.18,
+            SmoothingPresetOption.High => 0.34,
+            SmoothingPresetOption.Medium => 0.26,
+            _ => 0.0
+        };
+
+        for (var pass = 0; pass < passCount; pass++)
+        {
+            sourcePoints = SmoothPoints(sourcePoints, smoothingFactor);
+        }
+
+        var smoothed = new StrokeModel(stroke.Color);
+        foreach (var point in sourcePoints)
+        {
+            smoothed.AppendPoint(point);
+        }
+
         return smoothed;
     }
 
@@ -837,14 +949,26 @@ public sealed class DrawingSurfaceControl : FrameworkElement
             return;
         }
 
+        var now = _stopwatch.ElapsedMilliseconds;
+        if (_committedStrokeCache is not null && now - _lastCacheRebuildTicks < CacheRebuildThrottleMs)
+        {
+            ScheduleDeferredCacheRefresh();
+            return;
+        }
+
         var pixelWidth = Math.Max(1, (int)Math.Ceiling(RenderSize.Width * dpi.DpiScaleX));
         var pixelHeight = Math.Max(1, (int)Math.Ceiling(RenderSize.Height * dpi.DpiScaleY));
+        var rebuildWatch = Stopwatch.StartNew();
+
         var visual = new DrawingVisual();
         using (var context = visual.RenderOpen())
         {
             foreach (var stroke in Session.Strokes)
             {
-                StrokeRenderHelper.DrawStroke(context, stroke);
+                StrokeRenderHelper.DrawStroke(
+                    context,
+                    stroke,
+                    options: StrokeRenderHelper.CreateRenderOptions(Session.Settings, isLivePreview: false));
             }
         }
 
@@ -856,6 +980,31 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         _cacheRenderSize = RenderSize;
         _cacheDpi = dpi;
         _cacheDirty = false;
+        _lastCacheRebuildTicks = now;
+        rebuildWatch.Stop();
+        LogDebug($"Cache rebuild: {rebuildWatch.Elapsed.TotalMilliseconds:F2} ms");
+    }
+
+    private void ScheduleDeferredCacheRefresh()
+    {
+        if (_cacheRefreshScheduled)
+        {
+            return;
+        }
+
+        _cacheRefreshScheduled = true;
+        _ = Dispatcher.InvokeAsync(async () =>
+        {
+            try
+            {
+                await Task.Delay(CacheRebuildThrottleMs);
+                InvalidateVisual();
+            }
+            finally
+            {
+                _cacheRefreshScheduled = false;
+            }
+        });
     }
 
     private static Point AveragePoint(IEnumerable<(Point point, long ticks)> points)
@@ -872,6 +1021,57 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         }
 
         return new Point(x / count, y / count);
+    }
+
+    private static List<StrokePointModel> SmoothPoints(IReadOnlyList<StrokePointModel> points, double smoothingFactor)
+    {
+        if (points.Count < 3 || smoothingFactor <= 0)
+        {
+            return points.ToList();
+        }
+
+        var smoothed = new List<StrokePointModel>(points.Count)
+        {
+            new(points[0].Position, points[0].Width)
+        };
+
+        for (var index = 1; index < points.Count - 1; index++)
+        {
+            var previous = points[index - 1];
+            var current = points[index];
+            var next = points[index + 1];
+            var x = previous.Position.X * smoothingFactor + current.Position.X * (1 - 2 * smoothingFactor) + next.Position.X * smoothingFactor;
+            var y = previous.Position.Y * smoothingFactor + current.Position.Y * (1 - 2 * smoothingFactor) + next.Position.Y * smoothingFactor;
+            var width = previous.Width * 0.2 + current.Width * 0.6 + next.Width * 0.2;
+            smoothed.Add(new StrokePointModel(new Point(x, y), width));
+        }
+
+        smoothed.Add(new StrokePointModel(points[^1].Position, points[^1].Width));
+        return smoothed;
+    }
+
+    private static int GetLiveSmoothingSampleCount(AppSettingsModel settings)
+    {
+        if (!settings.LiveSmoothingEnabled && settings.SmoothingPreset == SmoothingPresetOption.Off)
+        {
+            return 1;
+        }
+
+        return settings.SmoothingPreset switch
+        {
+            SmoothingPresetOption.Low => 2,
+            SmoothingPresetOption.High => 5,
+            SmoothingPresetOption.Medium => 4,
+            _ => settings.LiveSmoothingEnabled ? 3 : 1
+        };
+    }
+
+    private double CalculateVelocityFactor(Point point, long ticks, double sensitivity)
+    {
+        var distance = (point - _lastPoint).Length;
+        var delta = Math.Max(1, ticks - _lastTicks);
+        var speed = distance / delta;
+        return Math.Clamp(1.62 - speed * sensitivity, 0.62, 1.58);
     }
 
     private readonly record struct EraserSegment(Point Start, Point End, double StrokeRadius);
@@ -898,7 +1098,18 @@ public sealed class DrawingSurfaceControl : FrameworkElement
 
         public void RebuildBounds()
         {
+            foreach (var fragment in Fragments)
+            {
+                fragment.RecalculateBounds();
+            }
+
             Bounds = CreateBoundsForStrokes(Fragments);
         }
+    }
+
+    [Conditional("DEBUG")]
+    private static void LogDebug(string message)
+    {
+        Debug.WriteLine($"[++PEN][Drawing] {message}");
     }
 }

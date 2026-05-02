@@ -1,8 +1,8 @@
 {
   "App": "++PEN",
-  "Version": "0.1.1",
+  "Version": "2.1",
   "MinVersion": "0.1.0",
-  "Notes": "Test güncellemesi - ikon değiştirildi",
-  "DownloadUrl": "https://github.com/xrayoner/pluspluspen/releases/download/v0.1.1/pluspluspen_update_0.1.1.zip",
-  "Sha256": ""
+  "Notes": "Aktif mod mavi çerçeve düzeltildi, silgi geçiş ve silme bugları düzeltildi, silgi kullanımı iyileştirildi.",
+  "DownloadUrl": "https://github.com/xrayoner/pluspluspen/releases/download/v2.1/pluspluspen_update_2.1.zip",
+  "Sha256": "151B2C43783CDC3C81B60514247A229B5A351B143E66837E326E43A4DD44194D"
 }

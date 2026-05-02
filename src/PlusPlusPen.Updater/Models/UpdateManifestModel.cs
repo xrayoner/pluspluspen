@@ -1,4 +1,4 @@
-namespace PlusPlusPen.Models;
+namespace PlusPlusPen.Updater.Models;
 
 public sealed class UpdateManifestModel
 {

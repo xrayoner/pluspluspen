@@ -24,9 +24,17 @@ public sealed class AppSettingsModel
 
     public double DefaultThickness { get; set; } = 7;
 
+    public PenStyleOption PenStyle { get; set; } = PenStyleOption.FountainPen;
+
     public PenSensitivity PenSensitivity { get; set; } = PenSensitivity.Medium;
 
+    public SmoothingPresetOption SmoothingPreset { get; set; } = SmoothingPresetOption.Medium;
+
     public bool DynamicThicknessEnabled { get; set; } = true;
+
+    public bool VelocityBasedThicknessEnabled { get; set; } = true;
+
+    public bool StrokeTaperEnabled { get; set; } = true;
 
     public bool FountainPenEffectEnabled { get; set; } = true;
 

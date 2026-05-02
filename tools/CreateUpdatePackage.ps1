@@ -1,112 +1,106 @@
-# CreateUpdatePackage.ps1
-# ++PEN için güncelleme paketi oluşturan script
-
 param(
-    [string]$Version = "0.1.1",
-    [string]$Notes = "Güncelleme paketi"
+    [string]$Version = "2.1",
+    [string]$MinVersion = "0.1.0",
+    [string]$Notes = "Aktif mod mavi çerçeve düzeltildi, silgi geçiş ve silme bugları düzeltildi, silgi kullanımı iyileştirildi."
 )
 
 $ErrorActionPreference = "Stop"
 
-# Çalışma dizini ayarla
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ProjectRoot = Split-Path -Parent $ScriptDir
-$PublishDir = Join-Path $ProjectRoot "src\PlusPlusPen\bin\Release\net8.0-windows\publish"
-$UpdateDir = Join-Path $ProjectRoot "update"
-$PackageDir = Join-Path $UpdateDir "packages"
-$ZipPath = Join-Path $PackageDir "pluspluspen_update_$Version.zip"
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$projectRoot = Split-Path -Parent $scriptDir
+$mainProject = Join-Path $projectRoot "src\PlusPlusPen\PlusPlusPen.csproj"
+$updaterProject = Join-Path $projectRoot "src\PlusPlusPen.Updater\PlusPlusPen.Updater.csproj"
+$assetSourceDir = Join-Path $projectRoot "src\PlusPlusPen\Assets"
 
-Write-Host "++PEN Güncelleme Paketi Oluşturucu" -ForegroundColor Cyan
-Write-Host "================================" -ForegroundColor Cyan
-Write-Host "Sürüm: $Version"
-Write-Host "Notlar: $Notes"
+$artifactsRoot = Join-Path $projectRoot "artifacts"
+$mainPublishDir = Join-Path $artifactsRoot "publish\PlusPlusPen"
+$updaterPublishDir = Join-Path $artifactsRoot "publish\PlusPlusPen.Updater"
+$packageWorkDir = Join-Path $artifactsRoot "package-work"
+$updateDir = Join-Path $projectRoot "update"
+$packageDir = Join-Path $updateDir "packages"
+$zipPath = Join-Path $packageDir "pluspluspen_update_$Version.zip"
+
+Write-Host "++PEN Guncelleme Paketi Olusturucu" -ForegroundColor Cyan
+Write-Host "Surum: $Version" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. Publish işlemi
-Write-Host "[1/4] Uygulamayı publish ediliyor..." -ForegroundColor Yellow
-if (Test-Path $PublishDir) {
-    Remove-Item -Path $PublishDir -Recurse -Force
+foreach ($path in @($mainPublishDir, $updaterPublishDir, $packageWorkDir)) {
+    if (Test-Path $path) {
+        Remove-Item -LiteralPath $path -Recurse -Force
+    }
 }
 
-$SourceCsproj = Join-Path $ProjectRoot "src\PlusPlusPen\PlusPlusPen.csproj"
-dotnet publish $SourceCsproj -c Release -o $PublishDir
-if ($LASTEXITCODE -ne 0) {
-    throw "Publish başarısız oldu."
-}
-Write-Host "✓ Publish tamamlandı" -ForegroundColor Green
-Write-Host ""
+New-Item -ItemType Directory -Path $mainPublishDir -Force | Out-Null
+New-Item -ItemType Directory -Path $updaterPublishDir -Force | Out-Null
+New-Item -ItemType Directory -Path $packageWorkDir -Force | Out-Null
+New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
 
-# 2. Paket dizini oluştur
-Write-Host "[2/4] Paket dizini hazırlanıyor..." -ForegroundColor Yellow
-if (-not (Test-Path $PackageDir)) {
-    New-Item -ItemType Directory -Path $PackageDir | Out-Null
-}
+Write-Host "[1/5] Ana uygulama publish aliniyor..." -ForegroundColor Yellow
+dotnet publish $mainProject -c Release -o $mainPublishDir
+if ($LASTEXITCODE -ne 0) { throw "Ana uygulama publish basarisiz oldu." }
 
-# 3. manifest.json oluştur
-Write-Host "[3/4] manifest.json oluşturuluyor..." -ForegroundColor Yellow
-$ManifestPath = Join-Path $PackageDir "manifest.json"
-$ManifestContent = @{
-    version = $Version
-    minVersion = "0.1.0"
-    notes = $Notes
-} | ConvertTo-Json
+Write-Host "[2/5] Guncellestirme Merkezi publish aliniyor..." -ForegroundColor Yellow
+dotnet publish $updaterProject -c Release -o $updaterPublishDir
+if ($LASTEXITCODE -ne 0) { throw "Updater publish basarisiz oldu." }
 
-Set-Content -Path $ManifestPath -Value $ManifestContent -Encoding UTF8
-Write-Host "✓ manifest.json oluşturuldu" -ForegroundColor Green
-Write-Host ""
-
-# 4. ZIP paketi oluştur
-Write-Host "[4/4] ZIP paketi oluşturuluyor: $ZipPath" -ForegroundColor Yellow
-
-if (Test-Path $ZipPath) {
-    Remove-Item -Path $ZipPath -Force
+Write-Host "[3/5] Guncellestirme Merkezi ana cikti klasorune kopyalaniyor..." -ForegroundColor Yellow
+Get-ChildItem -Path $updaterPublishDir -File | ForEach-Object {
+    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $mainPublishDir $_.Name) -Force
 }
 
-# ZIP oluştur
-Add-Type -AssemblyName "System.IO.Compression.FileSystem"
-$CompressionLevel = [System.IO.Compression.CompressionLevel]::Optimal
+$manifestPath = Join-Path $packageWorkDir "manifest.json"
+$manifest = [ordered]@{
+    App = "++PEN"
+    Version = $Version
+    MinVersion = $MinVersion
+    Notes = $Notes
+    CreatedAt = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssK")
+    DownloadUrl = ""
+    Sha256 = ""
+} | ConvertTo-Json -Depth 4
 
-# Publish dosyalarını ZIP'e ekle
-$ZipStream = [System.IO.Compression.ZipFile]::Open($ZipPath, [System.IO.Compression.ZipArchiveMode]::Create)
+Set-Content -LiteralPath $manifestPath -Value $manifest -Encoding UTF8
 
-# Manifest.json'u ekle
-$ManifestEntry = $ZipStream.CreateEntry("manifest.json")
-$ManifestStream = $ManifestEntry.Open()
-$ManifestBytes = [System.Text.Encoding]::UTF8.GetBytes($ManifestContent)
-$ManifestStream.Write($ManifestBytes, 0, $ManifestBytes.Length)
-$ManifestStream.Close()
+$appDir = Join-Path $packageWorkDir "app"
+New-Item -ItemType Directory -Path $appDir -Force | Out-Null
 
-# Publish dosyalarını ekle
-Get-ChildItem -Path $PublishDir -Recurse -File | ForEach-Object {
-    $RelativePath = $_.FullName.Substring($PublishDir.Length + 1)
-    $Entry = $ZipStream.CreateEntry($RelativePath)
-    $EntryStream = $Entry.Open()
-    $FileStream = [System.IO.File]::OpenRead($_.FullName)
-    $FileStream.CopyTo($EntryStream)
-    $EntryStream.Close()
-    $FileStream.Close()
+Write-Host "[4/5] ZIP calisma klasoru hazirlaniyor..." -ForegroundColor Yellow
+Get-ChildItem -Path $mainPublishDir -File | Where-Object {
+    $_.Name -notlike "PlusPlusPen.Updater*"
+} | ForEach-Object {
+    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $appDir $_.Name) -Force
 }
 
-$ZipStream.Close()
+Get-ChildItem -Path $mainPublishDir -Directory | ForEach-Object {
+    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $appDir $_.Name) -Recurse -Force
+}
 
-Write-Host "✓ ZIP paketi oluşturuldu: $ZipPath" -ForegroundColor Green
-Write-Host ""
+if (Test-Path $assetSourceDir) {
+    Copy-Item -LiteralPath $assetSourceDir -Destination (Join-Path $appDir "Assets") -Recurse -Force
+}
 
-# 5. SHA256 hesapla
-Write-Host "SHA256 Hash Hesaplanıyor..." -ForegroundColor Yellow
-$SHA256Hash = (Get-FileHash -Path $ZipPath -Algorithm SHA256).Hash
+if (Test-Path $zipPath) {
+    Remove-Item -LiteralPath $zipPath -Force
+}
+
+Write-Host "[5/5] ZIP olusturuluyor..." -ForegroundColor Yellow
+Compress-Archive -Path (Join-Path $packageWorkDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
+
+$sha256 = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
+
 Write-Host ""
-Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║ PAKET OLUŞTURULDU                                            ║" -ForegroundColor Cyan
-Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-Write-Host "Sürüm: $Version" -ForegroundColor Green
-Write-Host "Notlar: $Notes" -ForegroundColor Green
+Write-Host "Paket hazirlandi:" -ForegroundColor Green
+Write-Host $zipPath -ForegroundColor Green
 Write-Host ""
-Write-Host "Dosya: $ZipPath" -ForegroundColor Green
-Write-Host "SHA256:"
-Write-Host $SHA256Hash -ForegroundColor Yellow
+Write-Host "SHA256:" -ForegroundColor Yellow
+Write-Host $sha256 -ForegroundColor Yellow
 Write-Host ""
-Write-Host "latest.json'ı güncellemek için kullanın:" -ForegroundColor Cyan
-Write-Host "version: $Version"
-Write-Host "sha256: $SHA256Hash"
-Write-Host ""
+Write-Host "latest.json ornegi:" -ForegroundColor Cyan
+Write-Host "{"
+Write-Host "  `"App`": `"++PEN`","
+Write-Host "  `"Version`": `"$Version`","
+Write-Host "  `"MinVersion`": `"$MinVersion`","
+Write-Host "  `"Notes`": `"$Notes`","
+Write-Host "  `"DownloadUrl`": `"https://github.com/xrayoner/pluspluspen/releases/download/v$Version/pluspluspen_update_$Version.zip`","
+Write-Host "  `"Sha256`": `"$sha256`""
+Write-Host "}"

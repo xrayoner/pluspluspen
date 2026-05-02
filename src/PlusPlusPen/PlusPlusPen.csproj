@@ -8,10 +8,51 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>PlusPlusPen</AssemblyName>
     <RootNamespace>PlusPlusPen</RootNamespace>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <Version>2.1</Version>
+    <AssemblyVersion>2.1.0.0</AssemblyVersion>
+    <FileVersion>2.1.0.0</FileVersion>
+    <InformationalVersion>2.1</InformationalVersion>
+    <ProductVersion>2.1</ProductVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <Using Remove="System.Drawing" />
     <Using Remove="System.Windows.Forms" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\AppIcon.ico" />
+    <Resource Include="Assets\ToolbarReference.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PlusPlusPen.Updater\PlusPlusPen.Updater.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Target Name="CopyUpdaterArtifacts" AfterTargets="Build">
+    <ItemGroup>
+      <UpdaterArtifacts Include="..\PlusPlusPen.Updater\bin\$(Configuration)\net8.0-windows\PlusPlusPen.Updater.exe" />
+      <UpdaterArtifacts Include="..\PlusPlusPen.Updater\bin\$(Configuration)\net8.0-windows\PlusPlusPen.Updater.dll" />
+      <UpdaterArtifacts Include="..\PlusPlusPen.Updater\bin\$(Configuration)\net8.0-windows\PlusPlusPen.Updater.deps.json" />
+      <UpdaterArtifacts Include="..\PlusPlusPen.Updater\bin\$(Configuration)\net8.0-windows\PlusPlusPen.Updater.runtimeconfig.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(UpdaterArtifacts)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true"
+          Condition="Exists('%(UpdaterArtifacts.Identity)')" />
+  </Target>
+
+  <Target Name="CopyUpdaterArtifactsToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <UpdaterPublishArtifacts Include="..\PlusPlusPen.Updater\bin\$(Configuration)\net8.0-windows\PlusPlusPen.Updater.exe" />
+      <UpdaterPublishArtifacts Include="..\PlusPlusPen.Updater\bin\$(Configuration)\net8.0-windows\PlusPlusPen.Updater.dll" />
+      <UpdaterPublishArtifacts Include="..\PlusPlusPen.Updater\bin\$(Configuration)\net8.0-windows\PlusPlusPen.Updater.deps.json" />
+      <UpdaterPublishArtifacts Include="..\PlusPlusPen.Updater\bin\$(Configuration)\net8.0-windows\PlusPlusPen.Updater.runtimeconfig.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(UpdaterPublishArtifacts)"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true"
+          Condition="Exists('%(UpdaterPublishArtifacts.Identity)')" />
+  </Target>
 </Project>

@@ -28,7 +28,12 @@ public sealed class FileExportService
 
             foreach (var stroke in session.Strokes)
             {
-                StrokeRenderHelper.DrawStroke(context, stroke, scaleX, scaleY);
+                StrokeRenderHelper.DrawStroke(
+                    context,
+                    stroke,
+                    scaleX,
+                    scaleY,
+                    StrokeRenderHelper.CreateRenderOptions(settings, isLivePreview: false));
             }
         }
 

@@ -1,104 +1,99 @@
 # ++PEN
 
-++PEN is a .NET 8 WPF desktop overlay drawing tool for Windows 10/11. It opens as a compact floating toolbar and expands into a transparent full-screen drawing layer when the pen or eraser is active.
++PEN is a .NET 8 WPF overlay drawing tool for Windows 10/11. It opens as a compact floating toolbar and expands into a screen drawing layer for pen and eraser input.
 
-## MVP Features
+## v2.1 Update
 
-- Draggable floating toolbar with translucent light-blue theme
-- Logo click opens settings
-- Full-screen transparent overlay that covers the entire virtual desktop, including taskbar area
-- Pen, eraser, undo, redo, save, color palette, and thickness presets
-- Green active state for the selected pen tool
-- Fountain-pen-like dynamic stroke width
-- Optional smoothing and dynamic thickness toggles
-- Transparent PNG export with automatic file name: `pluspluspen_YYYYMMDD_HHMMSS.png`
-- Multi-tab settings window for general, theme, pen, eraser, save, updates, and maintenance
-- JSON-based persistent settings stored at `%AppData%\PlusPlusPen\settings.json`
-- ZIP update package inspection that reads `manifest.json`
-- Basic logging at `%AppData%\PlusPlusPen\logs\pluspluspen.log`
+- Aktif mod için referansa daha yakın açık mavi ekran çerçevesi düzeltildi.
+- Kalem ve silgi arası geçişte aynı overlay session korunuyor, yeniden screenshot alınmıyor.
+- Silgi sırasında canlı fragment render ile geri geliyormuş gibi görünen state ve cache sorunu düzeltildi.
+
+## Features
+
+- Compact floating toolbar
+- Full-screen drawing overlay
+- Pen, eraser, undo, redo, save
+- Dynamic stroke width and smoothing
+- PNG export
+- JSON-based settings in `%AppData%\PlusPlusPen\settings.json`
+- Separate `++PEN Güncelleştirme Merkezi` updater application
 
 ## Project Structure
 
-- `src/PlusPlusPen/Controls`: reusable drawing surface control
-- `src/PlusPlusPen/Models`: drawing and settings models
-- `src/PlusPlusPen/Services`: overlay, persistence, export, and history services
-- `src/PlusPlusPen/ViewModels`: MVVM view models and commands
-- `src/PlusPlusPen/Views`: toolbar, overlay, and settings windows
+- `src/PlusPlusPen`: main WPF application
+- `src/PlusPlusPen.Updater`: updater application
+- `tools/CreateUpdatePackage.ps1`: package creation script
+- `update/latest.json`: GitHub-compatible update feed sample
 
 ## Build
 
-Requirements:
-
-- Windows 10 or Windows 11
-- .NET 8 SDK with WPF workload support
-
-Commands:
-
 ```powershell
-cd src/PlusPlusPen
-dotnet restore
-dotnet build
-dotnet run
+dotnet build PlusPlusPen.sln
 ```
 
-## Notes
+Run the main app:
 
-- The current environment used for authoring did not include a .NET SDK, so the project files were prepared carefully but could not be compiled in-place here.
-- Overlay sizing uses the Windows virtual desktop metrics so drawing can extend across the full visible desktop region.
-- Settings are stored under `%AppData%\PlusPlusPen\settings.json`.
-- Broken settings files are ignored safely and the app falls back to defaults.
+```powershell
+dotnet run --project src/PlusPlusPen
+```
 
-## Update System (v0.1.0+)
+Release publish:
 
-### Installation & Distribution
+```powershell
+dotnet publish src/PlusPlusPen/PlusPlusPen.csproj -c Release
+```
 
-1. **Build the Release**:
-   ```powershell
-   cd src/PlusPlusPen
-   dotnet publish -c Release -o bin/Release/net8.0-windows/publish
-   ```
+## Windows Installer
 
-2. **Create Update Package** (PowerShell):
-   ```powershell
-   ./tools/CreateUpdatePackage.ps1 -Version "0.1.1" -Notes "Bug fixes and improvements"
-   ```
-   This creates `update/packages/pluspluspen_update_0.1.1.zip` with:
-   - `manifest.json` inside the ZIP
-   - All published binaries and dependencies
-   - Calculates and outputs SHA256 hash
+Installer script:
 
-3. **Upload to GitHub Releases**:
-   - Go to [GitHub Releases](https://github.com/xrayoner/pluspluspen/releases)
-   - Create a new release with tag `v0.1.1`
-   - Upload the ZIP file
-   - Copy download URL
+- `tools/installer/PlusPlusPenSetup.iss`
 
-4. **Update `update/latest.json`**:
-   ```json
-   {
-     "version": "0.1.1",
-     "minVersion": "0.1.0",
-     "notes": "Bug fixes and improvements",
-     "downloadUrl": "https://github.com/xrayoner/pluspluspen/releases/download/v0.1.1/pluspluspen_update_0.1.1.zip",
-     "sha256": "<hash from CreateUpdatePackage.ps1>"
-   }
-   ```
-   Push this to the repository.
+Installer source folder:
 
-### Update Check (Settings > Updates Tab)
+- `src/PlusPlusPen/bin/Release/net8.0-windows/publish`
 
-**Current Version**: v0.1.0 (shown in the Updates tab)
+Build the installer after publish:
 
-**Check from Internet** (`İnternetten al`):
-- Fetches `latest.json` from: `https://raw.githubusercontent.com/xrayoner/pluspluspen/main/update/latest.json`
-- Compares version with current (v0.1.0)
-- Shows message: "Yeni sürüm bulundu" or "Güncelleştirme yok"
-- Displays: version, minVersion, notes fields
+```powershell
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "tools\installer\PlusPlusPenSetup.iss"
+```
 
-**Load from File** (`Dosya ile al`):
-- User selects a ZIP package (e.g., `pluspluspen_update_0.1.1.zip`)
-- Reads `manifest.json` from inside the ZIP
-- Displays: version, minVersion, notes fields
-- Shows "Paket geçerli" message on validation
+## Update Center
 
-**Note**: Download and actual installation not yet implemented (test-only validation mode).
+Default feed URL:
+
+`https://raw.githubusercontent.com/xrayoner/pluspluspen/main/update/latest.json`
+
+Example `update/latest.json`:
+
+```json
+{
+  "App": "++PEN",
+  "Version": "2.1",
+  "MinVersion": "0.1.0",
+  "Notes": "Aktif mod mavi çerçeve düzeltildi, silgi geçiş ve silme bugları düzeltildi, silgi kullanımı iyileştirildi.",
+  "DownloadUrl": "https://github.com/xrayoner/pluspluspen/releases/download/v2.1/pluspluspen_update_2.1.zip",
+  "Sha256": ""
+}
+```
+
+## Create an Update Package
+
+```powershell
+./tools/CreateUpdatePackage.ps1 -Version "2.1" -MinVersion "0.1.0" -Notes "Aktif mod mavi çerçeve düzeltildi, silgi geçiş ve silme bugları düzeltildi, silgi kullanımı iyileştirildi."
+```
+
+The script:
+
+- publishes `PlusPlusPen`
+- publishes `PlusPlusPen.Updater`
+- copies updater files into the release folder for normal distribution
+- creates `update/packages/pluspluspen_update_<version>.zip`
+- prints the ZIP SHA256 hash
+
+## Updater Paths
+
+- App settings: `%AppData%\PlusPlusPen\settings.json`
+- Main app log: `%AppData%\PlusPlusPen\logs\pluspluspen.log`
+- Updater log: `%AppData%\PlusPlusPen\logs\updater.log`
