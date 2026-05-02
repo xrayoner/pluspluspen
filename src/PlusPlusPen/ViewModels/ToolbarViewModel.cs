@@ -34,7 +34,9 @@ public sealed class ToolbarViewModel : ViewModelBase
             if (args.PropertyName is nameof(DrawingSessionService.ActiveTool)
                 or nameof(DrawingSessionService.SelectedColor)
                 or nameof(DrawingSessionService.SelectedThickness)
-                or nameof(DrawingSessionService.OverlayVisible))
+                or nameof(DrawingSessionService.OverlayVisible)
+                or nameof(DrawingSessionService.IsDrawingSessionActive)
+                or nameof(DrawingSessionService.BackgroundSnapshot))
             {
                 RaiseToolbarState();
             }
@@ -73,11 +75,11 @@ public sealed class ToolbarViewModel : ViewModelBase
 
     public double SelectedThickness => _session.SelectedThickness;
 
-    public bool IsPenActive => ActiveTool == ToolKind.Pen && _session.OverlayVisible;
+    public bool IsPenActive => ActiveTool == ToolKind.Pen && _session.IsDrawingSessionActive;
 
-    public bool IsEraserActive => ActiveTool == ToolKind.Eraser && _session.OverlayVisible;
+    public bool IsEraserActive => ActiveTool == ToolKind.Eraser && _session.IsDrawingSessionActive;
 
-    public bool IsDrawingModeVisible => _session.OverlayVisible;
+    public bool IsDrawingModeVisible => _session.IsDrawingSessionActive;
 
     public bool IsBlackSelected => SelectedColor == Colors.Black;
 
@@ -92,7 +94,7 @@ public sealed class ToolbarViewModel : ViewModelBase
     private void SelectPen()
     {
         var stopwatch = Stopwatch.StartNew();
-        if (_session.ActiveTool == ToolKind.Pen && _session.OverlayVisible)
+        if (_session.IsDrawingSessionActive && _session.ActiveTool == ToolKind.Pen)
         {
             _services.OverlayWindowService.Hide();
             RaiseToolbarState();
@@ -110,7 +112,7 @@ public sealed class ToolbarViewModel : ViewModelBase
     private void SelectEraser()
     {
         var stopwatch = Stopwatch.StartNew();
-        if (_session.ActiveTool == ToolKind.Eraser && _session.OverlayVisible)
+        if (_session.IsDrawingSessionActive && _session.ActiveTool == ToolKind.Eraser)
         {
             _services.OverlayWindowService.Hide();
             RaiseToolbarState();
@@ -213,7 +215,8 @@ public sealed class ToolbarViewModel : ViewModelBase
 
     private void EnsureOverlayForToolSwitch()
     {
-        if (_session.BackgroundSnapshot is not null
+        if (_session.IsDrawingSessionActive
+            && _session.BackgroundSnapshot is not null
             && _session.OverlayVisible
             && _services.OverlayWindowService.GetWindow()?.IsVisible == true)
         {

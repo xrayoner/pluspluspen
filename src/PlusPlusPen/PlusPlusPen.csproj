@@ -9,11 +9,11 @@
     <AssemblyName>PlusPlusPen</AssemblyName>
     <RootNamespace>PlusPlusPen</RootNamespace>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
-    <Version>2.1</Version>
-    <AssemblyVersion>2.1.0.0</AssemblyVersion>
-    <FileVersion>2.1.0.0</FileVersion>
-    <InformationalVersion>2.1</InformationalVersion>
-    <ProductVersion>2.1</ProductVersion>
+    <Version>26.1</Version>
+    <AssemblyVersion>26.1.0.0</AssemblyVersion>
+    <FileVersion>26.1.0.0</FileVersion>
+    <InformationalVersion>+P+ 26.1</InformationalVersion>
+    <ProductVersion>+P+ 26.1</ProductVersion>
   </PropertyGroup>
 
   <ItemGroup>

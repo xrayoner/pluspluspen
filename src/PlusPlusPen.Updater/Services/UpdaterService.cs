@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using PlusPlusPen.Updater.Models;
 
@@ -280,7 +281,7 @@ public sealed class UpdaterService
 
         if (CompareVersions(currentVersion, manifest.MinVersion) < 0)
         {
-            throw new InvalidOperationException($"Bu paket en az v{NormalizeVersion(manifest.MinVersion)} sürümünü gerektiriyor.");
+            throw new InvalidOperationException($"Bu paket en az {FormatDisplayVersion(manifest.MinVersion)} sürümünü gerektiriyor.");
         }
     }
 
@@ -336,6 +337,18 @@ public sealed class UpdaterService
 
     private static string NormalizeVersion(string version)
     {
-        return version.Trim().TrimStart('v', 'V');
+        var trimmed = version.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return string.Empty;
+        }
+
+        var match = Regex.Match(trimmed, @"\d+(?:\.\d+)+|\d+");
+        return match.Success ? match.Value : trimmed.TrimStart('v', 'V');
+    }
+
+    private static string FormatDisplayVersion(string version)
+    {
+        return version.TrimStart();
     }
 }

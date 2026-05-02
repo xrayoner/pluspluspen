@@ -2,7 +2,7 @@ namespace PlusPlusPen.Models;
 
 public static class AppVersionInfo
 {
-    public const string CurrentVersion = "2.1";
+    public const string CurrentVersion = "26.1";
 
-    public static string CurrentDisplayVersion => $"v{CurrentVersion}";
+    public static string CurrentDisplayVersion => $"+P+ {CurrentVersion}";
 }

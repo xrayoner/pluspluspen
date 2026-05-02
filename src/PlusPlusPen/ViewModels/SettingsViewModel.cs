@@ -29,6 +29,8 @@ public sealed class SettingsViewModel : ViewModelBase
     private bool _dynamicThicknessEnabled;
     private bool _velocityBasedThicknessEnabled;
     private bool _strokeTaperEnabled;
+    private bool _autoStraightLineEnabled;
+    private double _straightLineSensitivity;
     private bool _fountainPenEffectEnabled;
     private bool _performanceModeEnabled;
     private bool _liveSmoothingEnabled;
@@ -76,6 +78,8 @@ public sealed class SettingsViewModel : ViewModelBase
         _dynamicThicknessEnabled = settings.DynamicThicknessEnabled;
         _velocityBasedThicknessEnabled = settings.VelocityBasedThicknessEnabled;
         _strokeTaperEnabled = settings.StrokeTaperEnabled;
+        _autoStraightLineEnabled = settings.AutoStraightLineEnabled;
+        _straightLineSensitivity = settings.StraightLineSensitivity * 100;
         _fountainPenEffectEnabled = settings.FountainPenEffectEnabled;
         _performanceModeEnabled = settings.PerformanceModeEnabled;
         _liveSmoothingEnabled = settings.LiveSmoothingEnabled;
@@ -103,7 +107,7 @@ public sealed class SettingsViewModel : ViewModelBase
 
         ThemeOptions = new ObservableCollection<ThemeMode>(Enum.GetValues<ThemeMode>());
         PanelSizeOptions = new ObservableCollection<PanelSizeOption>(Enum.GetValues<PanelSizeOption>());
-        ToolOptions = new ObservableCollection<ToolKind>(Enum.GetValues<ToolKind>());
+        ToolOptions = new ObservableCollection<ToolKind>(Enum.GetValues<ToolKind>().Where(x => x != ToolKind.None));
         LanguageOptions = new ObservableCollection<AppLanguage>(Enum.GetValues<AppLanguage>());
         PenStyleOptions = new ObservableCollection<PenStyleOption>(Enum.GetValues<PenStyleOption>());
         PenSensitivityOptions = new ObservableCollection<PenSensitivity>(Enum.GetValues<PenSensitivity>());
@@ -255,6 +259,18 @@ public sealed class SettingsViewModel : ViewModelBase
     {
         get => _strokeTaperEnabled;
         set => SetProperty(ref _strokeTaperEnabled, value);
+    }
+
+    public bool AutoStraightLineEnabled
+    {
+        get => _autoStraightLineEnabled;
+        set => SetProperty(ref _autoStraightLineEnabled, value);
+    }
+
+    public double StraightLineSensitivity
+    {
+        get => _straightLineSensitivity;
+        set => SetProperty(ref _straightLineSensitivity, value);
     }
 
     public bool FountainPenEffectEnabled
@@ -693,6 +709,8 @@ public sealed class SettingsViewModel : ViewModelBase
             DynamicThicknessEnabled = DynamicThicknessEnabled,
             VelocityBasedThicknessEnabled = VelocityBasedThicknessEnabled,
             StrokeTaperEnabled = StrokeTaperEnabled,
+            AutoStraightLineEnabled = AutoStraightLineEnabled,
+            StraightLineSensitivity = Math.Clamp(StraightLineSensitivity / 100d, 0.5, 0.98),
             FountainPenEffectEnabled = fountainEffectEnabled,
             PerformanceModeEnabled = PerformanceModeEnabled,
             LiveSmoothingEnabled = liveSmoothingEnabled,

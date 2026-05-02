@@ -15,13 +15,14 @@ public sealed class DrawingSessionService : INotifyPropertyChanged
     private Color _selectedColor = Colors.DodgerBlue;
     private double _selectedThickness;
     private bool _overlayVisible;
+    private bool _isDrawingSessionActive;
     private BitmapSource? _backgroundSnapshot;
 
     public DrawingSessionService(AppSettingsModel settings)
     {
         _settings = settings;
         _selectedThickness = settings.DefaultThickness;
-        _activeTool = settings.DefaultTool;
+        _activeTool = ToolKind.None;
         Palette = new ReadOnlyCollection<PaletteColorModel>(
         [
             new PaletteColorModel("Black", Colors.Black),
@@ -64,7 +65,16 @@ public sealed class DrawingSessionService : INotifyPropertyChanged
         set => SetField(ref _overlayVisible, value);
     }
 
-    public bool IsModeTintVisible => _overlayVisible && (_activeTool == ToolKind.Pen || _activeTool == ToolKind.Eraser);
+    public bool IsDrawingSessionActive
+    {
+        get => _isDrawingSessionActive;
+        private set => SetField(ref _isDrawingSessionActive, value);
+    }
+
+    public bool IsModeTintVisible => _overlayVisible
+        && _isDrawingSessionActive
+        && _backgroundSnapshot is not null
+        && (_activeTool == ToolKind.Pen || _activeTool == ToolKind.Eraser);
 
     public AppSettingsModel Settings
     {
@@ -141,13 +151,17 @@ public sealed class DrawingSessionService : INotifyPropertyChanged
     public void ApplySettings(AppSettingsModel settings)
     {
         Settings = settings;
-        ActiveTool = settings.DefaultTool;
         SelectedThickness = settings.DefaultThickness;
+        if (!IsDrawingSessionActive)
+        {
+            ActiveTool = ToolKind.None;
+        }
         RaiseStateSignals();
     }
 
     public void InitializeOverlaySurface(BitmapSource snapshot)
     {
+        IsDrawingSessionActive = true;
         BackgroundSnapshot = snapshot;
         Strokes.Clear();
         _history.Clear();
@@ -156,12 +170,21 @@ public sealed class DrawingSessionService : INotifyPropertyChanged
 
     public void SetBackgroundSnapshot(BitmapSource snapshot)
     {
+        IsDrawingSessionActive = true;
         BackgroundSnapshot = snapshot;
+        RaiseStateSignals();
+    }
+
+    public void BeginOverlaySession()
+    {
+        IsDrawingSessionActive = true;
         RaiseStateSignals();
     }
 
     public void ResetOverlaySurface()
     {
+        ActiveTool = ToolKind.None;
+        IsDrawingSessionActive = false;
         BackgroundSnapshot = null;
         Strokes.Clear();
         _history.Clear();
@@ -191,7 +214,10 @@ public sealed class DrawingSessionService : INotifyPropertyChanged
 
         field = value;
         RaisePropertyChanged(propertyName);
-        if (propertyName is nameof(ActiveTool) or nameof(OverlayVisible))
+        if (propertyName is nameof(ActiveTool)
+            or nameof(OverlayVisible)
+            or nameof(IsDrawingSessionActive)
+            or nameof(BackgroundSnapshot))
         {
             RaisePropertyChanged(nameof(IsModeTintVisible));
         }

@@ -36,6 +36,10 @@ public sealed class AppSettingsModel
 
     public bool StrokeTaperEnabled { get; set; } = true;
 
+    public bool AutoStraightLineEnabled { get; set; } = true;
+
+    public double StraightLineSensitivity { get; set; } = 0.8;
+
     public bool FountainPenEffectEnabled { get; set; } = true;
 
     public bool PerformanceModeEnabled { get; set; } = true;

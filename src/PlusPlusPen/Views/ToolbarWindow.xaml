@@ -13,6 +13,7 @@
         Background="Transparent"
         ShowInTaskbar="True"
         Loaded="HandleToolbarLoaded"
+        Deactivated="HandleToolbarDeactivated"
         PreviewKeyDown="HandleWindowPreviewKeyDown"
         Topmost="True">
     <Window.Resources>
@@ -46,6 +47,100 @@
                                 <Setter TargetName="Root" Property="Background" Value="#FFE6F7FF" />
                                 <Setter TargetName="Root" Property="BorderBrush" Value="#FF36A7EC" />
                             </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PenToolButtonStyle" TargetType="Button" BasedOn="{StaticResource FloatingToolButtonStyle}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="14">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#FFFFFFFF" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#FF7ECFFD" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#FFE6F7FF" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#FF36A7EC" />
+                            </Trigger>
+                            <DataTrigger Binding="{Binding DataContext.IsPenActive, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#FF39C66D" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#FF14823D" />
+                            </DataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding DataContext.IsPenActive, RelativeSource={RelativeSource AncestorType=Window}}" Value="True" />
+                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}" Value="True" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="Root" Property="Background" Value="#FF42D676" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#FF14823D" />
+                            </MultiDataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding DataContext.IsPenActive, RelativeSource={RelativeSource AncestorType=Window}}" Value="True" />
+                                    <Condition Binding="{Binding IsPressed, RelativeSource={RelativeSource TemplatedParent}}" Value="True" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="Root" Property="Background" Value="#FF2EAF5E" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#FF0E6A30" />
+                            </MultiDataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="EraserToolButtonStyle" TargetType="Button" BasedOn="{StaticResource FloatingToolButtonStyle}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="14">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#FFFFFFFF" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#FF7ECFFD" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#FFE6F7FF" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#FF36A7EC" />
+                            </Trigger>
+                            <DataTrigger Binding="{Binding DataContext.IsEraserActive, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#FF39C66D" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#FF14823D" />
+                            </DataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding DataContext.IsEraserActive, RelativeSource={RelativeSource AncestorType=Window}}" Value="True" />
+                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}" Value="True" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="Root" Property="Background" Value="#FF42D676" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#FF14823D" />
+                            </MultiDataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding DataContext.IsEraserActive, RelativeSource={RelativeSource AncestorType=Window}}" Value="True" />
+                                    <Condition Binding="{Binding IsPressed, RelativeSource={RelativeSource TemplatedParent}}" Value="True" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="Root" Property="Background" Value="#FF2EAF5E" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#FF0E6A30" />
+                            </MultiDataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -179,9 +274,11 @@
                 <StackPanel Grid.Column="4"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
-                    <Button Style="{StaticResource FloatingToolButtonStyle}"
+                    <Button x:Name="PenButton"
+                            Style="{StaticResource PenToolButtonStyle}"
                             Command="{Binding SelectPenCommand}"
                             ClickMode="Press"
+                            PreviewMouseLeftButtonDown="PenButton_PreviewMouseLeftButtonDown"
                             ToolTip="Kalem">
                         <Viewbox Width="31" Height="31">
                             <Canvas Width="40" Height="40">
@@ -204,9 +301,11 @@
                         </Viewbox>
                     </Button>
 
-                    <Button Style="{StaticResource FloatingToolButtonStyle}"
+                    <Button x:Name="EraserButton"
+                            Style="{StaticResource EraserToolButtonStyle}"
                             Command="{Binding SelectEraserCommand}"
                             ClickMode="Press"
+                            PreviewMouseLeftButtonDown="EraserButton_PreviewMouseLeftButtonDown"
                             ToolTip="Silgi">
                         <Viewbox Width="31" Height="31">
                             <Canvas Width="40" Height="40">

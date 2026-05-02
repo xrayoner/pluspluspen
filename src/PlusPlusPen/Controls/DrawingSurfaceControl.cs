@@ -42,6 +42,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
     private long _lastEraserCommitTicks;
     private bool _eraserDirtySinceCommit;
     private Point? _lastEraserPoint;
+    private long _activeStrokeStartedAtTicks;
 
     public DrawingSessionService? Session
     {
@@ -325,6 +326,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         if (Session.ActiveTool == ToolKind.Pen)
         {
             _activeStroke = new StrokeModel(Session.SelectedColor);
+            _activeStrokeStartedAtTicks = _lastTicks;
             AddPointToActiveStroke(rawPoint, pressure, isFirst: true);
         }
         else
@@ -362,7 +364,10 @@ public sealed class DrawingSurfaceControl : FrameworkElement
     {
         if (Session is not null && Session.ActiveTool == ToolKind.Pen && _activeStroke is { Points.Count: > 0 })
         {
-            _activeStroke = FinalizeCompletedStroke(_activeStroke, Session.Settings);
+            _activeStroke = FinalizeCompletedStroke(
+                _activeStroke,
+                Session.Settings,
+                Math.Max(0, _stopwatch.ElapsedMilliseconds - _activeStrokeStartedAtTicks));
 
             Session.PushHistorySnapshot();
             Session.AddStroke(_activeStroke);
@@ -379,6 +384,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         _activeStroke = null;
         _isDrawing = false;
         _activeTouchId = null;
+        _activeStrokeStartedAtTicks = 0;
         _smoothingWindow.Clear();
         ClearEraserState();
 
@@ -863,7 +869,7 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         }
     }
 
-    private static StrokeModel FinalizeCompletedStroke(StrokeModel stroke, AppSettingsModel settings)
+    private static StrokeModel FinalizeCompletedStroke(StrokeModel stroke, AppSettingsModel settings, long durationMs)
     {
         if (stroke.Points.Count < 3)
         {
@@ -908,6 +914,11 @@ public sealed class DrawingSurfaceControl : FrameworkElement
         foreach (var point in sourcePoints)
         {
             smoothed.AppendPoint(point);
+        }
+
+        if (settings.AutoStraightLineEnabled)
+        {
+            smoothed = TryStraightenStroke(smoothed, settings, durationMs);
         }
 
         return smoothed;
@@ -1064,6 +1075,61 @@ public sealed class DrawingSurfaceControl : FrameworkElement
             SmoothingPresetOption.Medium => 4,
             _ => settings.LiveSmoothingEnabled ? 3 : 1
         };
+    }
+
+    private static StrokeModel TryStraightenStroke(StrokeModel stroke, AppSettingsModel settings, long durationMs)
+    {
+        if (durationMs < 2000 || stroke.Points.Count < 4)
+        {
+            return stroke;
+        }
+
+        var start = stroke.Points[0].Position;
+        var end = stroke.Points[^1].Position;
+        var directLength = (end - start).Length;
+        if (directLength < 140)
+        {
+            return stroke;
+        }
+
+        var pathLength = 0d;
+        var deviationSum = 0d;
+        var maxDeviation = 0d;
+        for (var index = 1; index < stroke.Points.Count; index++)
+        {
+            pathLength += (stroke.Points[index].Position - stroke.Points[index - 1].Position).Length;
+        }
+
+        if (pathLength <= 0.01)
+        {
+            return stroke;
+        }
+
+        foreach (var point in stroke.Points)
+        {
+            var deviation = DistancePointToSegment(point.Position, start, end);
+            deviationSum += deviation;
+            maxDeviation = Math.Max(maxDeviation, deviation);
+        }
+
+        var averageDeviation = deviationSum / stroke.Points.Count;
+        var normalizedAverageDeviation = averageDeviation / directLength;
+        var normalizedMaxDeviation = maxDeviation / directLength;
+        var lengthPenalty = Math.Abs(pathLength - directLength) / pathLength;
+        var straightnessScore = 1.0 - Math.Min(
+            1.0,
+            normalizedAverageDeviation * 6.2 + normalizedMaxDeviation * 2.7 + lengthPenalty * 1.9);
+
+        if (straightnessScore < Math.Clamp(settings.StraightLineSensitivity, 0.5, 0.98))
+        {
+            return stroke;
+        }
+
+        var averageWidth = stroke.Points.Average(x => x.Width);
+        var straightened = new StrokeModel(stroke.Color);
+        straightened.AppendPoint(new StrokePointModel(start, averageWidth));
+        straightened.AppendPoint(new StrokePointModel(end, averageWidth));
+        return straightened;
     }
 
     private double CalculateVelocityFactor(Point point, long ticks, double sensitivity)

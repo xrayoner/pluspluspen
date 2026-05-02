@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.IO;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Security.Cryptography;
 using System.Text.Json;
 using PlusPlusPen.Models;
@@ -136,7 +137,7 @@ public sealed class UpdatePackageService
 
         if (!IsCurrentVersionCompatible(manifest.MinVersion, currentVersion))
         {
-            throw new InvalidOperationException($"Bu paket en az v{NormalizeVersion(manifest.MinVersion)} sürümünü gerektiriyor.");
+            throw new InvalidOperationException($"Bu paket en az {FormatDisplayVersion(manifest.MinVersion)} sürümünü gerektiriyor.");
         }
     }
 
@@ -177,12 +178,19 @@ public sealed class UpdatePackageService
 
     public static string NormalizeVersion(string version)
     {
-        return version.Trim().TrimStart('v', 'V');
+        var trimmed = version.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return string.Empty;
+        }
+
+        var match = Regex.Match(trimmed, @"\d+(?:\.\d+)+|\d+");
+        return match.Success ? match.Value : trimmed.TrimStart('v', 'V');
     }
 
     public static string FormatDisplayVersion(string version)
     {
-        return $"v{NormalizeVersion(version)}";
+        return version.TrimStart();
     }
 
     private static int CompareVersions(string left, string right)

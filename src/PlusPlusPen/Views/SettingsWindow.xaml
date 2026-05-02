@@ -141,6 +141,16 @@
                             <CheckBox Margin="0,8,0,0"
                                       Content="Baş/son inceltme açık"
                                       IsChecked="{Binding StrokeTaperEnabled}" />
+                            <CheckBox Margin="0,8,0,0"
+                                      Content="Düz çizgi otomatik düzeltme"
+                                      IsChecked="{Binding AutoStraightLineEnabled}" />
+
+                            <TextBlock Margin="0,18,0,0" Text="Düz çizgi hassasiyeti (%)" FontWeight="SemiBold" />
+                            <Slider Margin="0,6,0,0"
+                                    Minimum="50"
+                                    Maximum="98"
+                                    Value="{Binding StraightLineSensitivity}" />
+                            <TextBlock Text="{Binding StraightLineSensitivity, StringFormat=F0}" HorizontalAlignment="Right" />
 
                             <TextBlock Margin="0,18,0,0" Text="Performans modu" FontWeight="SemiBold" />
                             <CheckBox Margin="0,6,0,0"

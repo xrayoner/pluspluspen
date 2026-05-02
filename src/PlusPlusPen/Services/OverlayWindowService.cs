@@ -28,11 +28,12 @@ public sealed class OverlayWindowService
     {
         _overlayWindow ??= new OverlayWindow(_sessionService);
         var requiresCapture = _sessionService.BackgroundSnapshot is null;
+        _sessionService.BeginOverlaySession();
 
         if (!_overlayWindow.IsVisible)
         {
             _overlayWindow.SyncBounds();
-            _overlayWindow.Topmost = false;
+            _overlayWindow.Topmost = true;
             _overlayWindow.Show();
             _overlayWindow.PrepareForInput();
         }
@@ -40,7 +41,7 @@ public sealed class OverlayWindowService
         _sessionService.OverlayVisible = true;
         _overlayWindow.SyncBounds();
         _overlayWindow.ApplySettings(_sessionService.Settings);
-        _overlayWindow.Topmost = false;
+        _overlayWindow.Topmost = true;
         owner.Show();
         RefreshToolbarZOrder(owner);
         if (requiresCapture)
@@ -50,6 +51,7 @@ public sealed class OverlayWindowService
         else
         {
             _overlayWindow.PrepareForInput();
+            RefreshToolbarZOrder(owner);
         }
         return _overlayWindow;
     }
@@ -62,6 +64,10 @@ public sealed class OverlayWindowService
         {
             _overlayWindow.SyncBounds();
             _overlayWindow.PrepareForInput();
+            if (System.Windows.Application.Current.MainWindow is Window toolbar)
+            {
+                RefreshToolbarZOrder(toolbar);
+            }
         }
     }
 
@@ -77,7 +83,7 @@ public sealed class OverlayWindowService
         if (_overlayWindow is not null)
         {
             _overlayWindow.ApplySettings(_sessionService.Settings);
-            _overlayWindow.Topmost = false;
+            _overlayWindow.Topmost = true;
         }
 
         RefreshToolbarZOrder(owner);
@@ -147,8 +153,37 @@ public sealed class OverlayWindowService
         }
     }
 
-    private static void RefreshToolbarZOrder(Window owner)
+    private void RefreshToolbarZOrder(Window owner)
     {
+        if (_overlayWindow is { IsVisible: true })
+        {
+            var overlayHandle = new WindowInteropHelper(_overlayWindow).Handle;
+            if (overlayHandle != IntPtr.Zero)
+            {
+                SetWindowPos(
+                    overlayHandle,
+                    HWND_TOPMOST,
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            }
+        }
+
+        var ownerHandle = new WindowInteropHelper(owner).Handle;
+        if (ownerHandle != IntPtr.Zero)
+        {
+            SetWindowPos(
+                ownerHandle,
+                HWND_TOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        }
+
         owner.Topmost = false;
         owner.Topmost = true;
         owner.Activate();
@@ -193,6 +228,23 @@ public sealed class OverlayWindowService
     [DllImport("gdi32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DeleteObject(IntPtr hObject);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(
+        IntPtr hWnd,
+        IntPtr hWndInsertAfter,
+        int x,
+        int y,
+        int cx,
+        int cy,
+        uint uFlags);
+
+    private static readonly IntPtr HWND_TOPMOST = new(-1);
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOACTIVATE = 0x0010;
+    private const uint SWP_SHOWWINDOW = 0x0040;
 
     [Conditional("DEBUG")]
     private static void LogDebug(string message)

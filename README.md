@@ -1,12 +1,10 @@
 # ++PEN
 
-+PEN is a .NET 8 WPF overlay drawing tool for Windows 10/11. It opens as a compact floating toolbar and expands into a screen drawing layer for pen and eraser input.
+++PEN is a .NET 8 WPF overlay drawing tool for Windows 10/11. It opens as a compact floating toolbar and expands into a screen drawing layer for pen and eraser input.
 
-## v2.1 Update
+## +P+ 26.1
 
-- Aktif mod için referansa daha yakın açık mavi ekran çerçevesi düzeltildi.
-- Kalem ve silgi arası geçişte aynı overlay session korunuyor, yeniden screenshot alınmıyor.
-- Silgi sırasında canlı fragment render ile geri geliyormuş gibi görünen state ve cache sorunu düzeltildi.
+- Çizim modunda PDF'ye veya masaüstüne tıklayınca toolbar'ın arkaya düşme sorunu düzeltildi.
 
 ## Features
 
@@ -70,10 +68,10 @@ Example `update/latest.json`:
 ```json
 {
   "App": "++PEN",
-  "Version": "2.1",
+  "Version": "+P+ 26.1",
   "MinVersion": "0.1.0",
-  "Notes": "Aktif mod mavi çerçeve düzeltildi, silgi geçiş ve silme bugları düzeltildi, silgi kullanımı iyileştirildi.",
-  "DownloadUrl": "https://github.com/xrayoner/pluspluspen/releases/download/v2.1/pluspluspen_update_2.1.zip",
+  "Notes": "Toolbar'ın çizim modunda arkaya düşme sorunu düzeltildi.",
+  "DownloadUrl": "https://github.com/xrayoner/pluspluspen/releases/download/26.1/pluspluspen_update_26.1.zip",
   "Sha256": ""
 }
 ```
@@ -81,7 +79,7 @@ Example `update/latest.json`:
 ## Create an Update Package
 
 ```powershell
-./tools/CreateUpdatePackage.ps1 -Version "2.1" -MinVersion "0.1.0" -Notes "Aktif mod mavi çerçeve düzeltildi, silgi geçiş ve silme bugları düzeltildi, silgi kullanımı iyileştirildi."
+./tools/CreateUpdatePackage.ps1 -Version "26.1" -DisplayVersion "+P+ 26.1" -MinVersion "0.1.0" -Notes "Toolbar'ın çizim modunda arkaya düşme sorunu düzeltildi."
 ```
 
 The script:

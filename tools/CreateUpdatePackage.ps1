@@ -1,7 +1,8 @@
 param(
-    [string]$Version = "2.1",
+    [string]$Version = "26.1",
+    [string]$DisplayVersion = "+P+ 26.1",
     [string]$MinVersion = "0.1.0",
-    [string]$Notes = "Aktif mod mavi çerçeve düzeltildi, silgi geçiş ve silme bugları düzeltildi, silgi kullanımı iyileştirildi."
+    [string]$Notes = "Toolbar'ın çizim modunda arkaya düşme sorunu düzeltildi."
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,7 +22,7 @@ $packageDir = Join-Path $updateDir "packages"
 $zipPath = Join-Path $packageDir "pluspluspen_update_$Version.zip"
 
 Write-Host "++PEN Guncelleme Paketi Olusturucu" -ForegroundColor Cyan
-Write-Host "Surum: $Version" -ForegroundColor Cyan
+Write-Host "Surum: $DisplayVersion" -ForegroundColor Cyan
 Write-Host ""
 
 foreach ($path in @($mainPublishDir, $updaterPublishDir, $packageWorkDir)) {
@@ -51,7 +52,7 @@ Get-ChildItem -Path $updaterPublishDir -File | ForEach-Object {
 $manifestPath = Join-Path $packageWorkDir "manifest.json"
 $manifest = [ordered]@{
     App = "++PEN"
-    Version = $Version
+    Version = $DisplayVersion
     MinVersion = $MinVersion
     Notes = $Notes
     CreatedAt = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssK")
@@ -98,9 +99,9 @@ Write-Host ""
 Write-Host "latest.json ornegi:" -ForegroundColor Cyan
 Write-Host "{"
 Write-Host "  `"App`": `"++PEN`","
-Write-Host "  `"Version`": `"$Version`","
+Write-Host "  `"Version`": `"$DisplayVersion`","
 Write-Host "  `"MinVersion`": `"$MinVersion`","
 Write-Host "  `"Notes`": `"$Notes`","
-Write-Host "  `"DownloadUrl`": `"https://github.com/xrayoner/pluspluspen/releases/download/v$Version/pluspluspen_update_$Version.zip`","
+Write-Host "  `"DownloadUrl`": `"https://github.com/xrayoner/pluspluspen/releases/download/$Version/pluspluspen_update_$Version.zip`","
 Write-Host "  `"Sha256`": `"$sha256`""
 Write-Host "}"
